@@ -350,9 +350,8 @@ local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 end
 
 -- N/S spur from z=0 toward satZ. Junction at z=0 placed in caller.
--- Off-ramp exit every 50 highway lots.
---   goingNorth (+z): ramp at city edge is hramp3 (N=road,S=hw); exit ramps go E/W.
---   goingSouth (-z): ramp at city edge is hramp1 (S=road,N=hw); exit ramps go E/W.
+-- Uses highroad_e (same visual as backbone). Ramps are E/W style (hramp2/hramp4).
+-- Off-ramp exits perpendicular (north/south along Z) every 50 lots.
 local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 	local LSZ = turf.Lot.LOT_SIZE
 	local goingNorth = satZ > 0
@@ -360,7 +359,7 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 	local z = zStep
 	local prevSkip = false
 	local hwTick = 0
-	local rampSide = 0  -- 0 = east (+x) exit, 1 = west (-x) exit
+	local rampSide = 0  -- 0 = north (+z) exit, 1 = south (-z) exit
 	local function pastEnd(cur) return goingNorth and (cur > satZ) or (cur < satZ) end
 	while not pastEnd(z) do
 		local skip = inCityRadius(fx, z, skipCenters)
@@ -370,37 +369,39 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 			local vt = L and L.vtype or turf.Lot.LOT_HILLS
 			local path
 			if nextSkip and not prevSkip then
-				path = goingNorth and "packs/vanilla/hramp3" or "packs/vanilla/hramp1"
+				-- approaching satellite city: highway behind, road ahead
+				path = goingNorth and "packs/vanilla/hramp2" or "packs/vanilla/hramp4"
 				hwTick = 0
 			elseif prevSkip then
-				path = goingNorth and "packs/vanilla/hramp1" or "packs/vanilla/hramp3"
+				-- leaving main city: road behind, highway ahead
+				path = goingNorth and "packs/vanilla/hramp4" or "packs/vanilla/hramp2"
 				hwTick = 0
 			elseif vt == turf.Lot.LOT_SEA then
-				path = "packs/vanilla/highroad_canal_n"
+				path = "packs/vanilla/highroad_canal_e"
 				hwTick = hwTick + 1
 			elseif hwTick > 0 and hwTick % 50 == 0 and not nextSkip then
-				-- off-ramp: T-junction → 2 approach lots → ramp (3 lots total)
+				-- off-ramp exits north or south (perpendicular to E-W visual)
 				local rampDir = rampSide == 0 and 1 or -1
-				local appr1X  = fx + rampDir * LSZ
-				local appr2X  = fx + rampDir * 2 * LSZ
-				local rampX   = fx + rampDir * 3 * LSZ
-				if not inCityRadius(appr1X, z, skipCenters)
-				   and not inCityRadius(appr2X, z, skipCenters)
-				   and not inCityRadius(rampX,  z, skipCenters) then
-					path = (rampSide == 0) and "packs/vanilla/highroad_jnse_tl"
-					                       or  "packs/vanilla/highroad_jnsw_tl"
-					local rp = (rampSide == 0) and "packs/vanilla/hramp2"
-					                           or  "packs/vanilla/hramp4"
-					forceHighwayLot(LC, W, appr1X, z, "packs/vanilla/highroad_e", 'n')
-					forceHighwayLot(LC, W, appr2X, z, "packs/vanilla/highroad_e", 'n')
-					forceHighwayLot(LC, W, rampX,  z, rp, 'n')
+				local appr1Z  = z + rampDir * LSZ
+				local appr2Z  = z + rampDir * 2 * LSZ
+				local rampZ   = z + rampDir * 3 * LSZ
+				if not inCityRadius(fx, appr1Z, skipCenters)
+				   and not inCityRadius(fx, appr2Z, skipCenters)
+				   and not inCityRadius(fx, rampZ,  skipCenters) then
+					path = (rampSide == 0) and "packs/vanilla/highroad_jnew_tl"
+					                       or  "packs/vanilla/highroad_jsew_tl"
+					local rp = (rampSide == 0) and "packs/vanilla/hramp3"
+					                           or  "packs/vanilla/hramp1"
+					forceHighwayLot(LC, W, fx, appr1Z, "packs/vanilla/highroad_n", 'n')
+					forceHighwayLot(LC, W, fx, appr2Z, "packs/vanilla/highroad_n", 'n')
+					forceHighwayLot(LC, W, fx, rampZ,  rp, 'n')
 					rampSide = 1 - rampSide
 				else
-					path = "packs/vanilla/highroad_n"
+					path = "packs/vanilla/highroad_e"
 				end
 				hwTick = hwTick + 1
 			else
-				path = "packs/vanilla/highroad_n"
+				path = "packs/vanilla/highroad_e"
 				hwTick = hwTick + 1
 			end
 			forceHighwayLot(LC, W, fx, z, path, 'n')
