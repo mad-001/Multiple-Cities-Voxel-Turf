@@ -532,20 +532,43 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 	end
 
 	-- Underground metro lines, 1 lot offset from the highway corridors.
-	-- Each N/S satellite gets a spur at sat.x+LSZ; E/W satellites share a row at z=LSZ.
-	-- Metro lots inside city radii are skipped (tunnel goes underground through cities).
+	-- Stations sit at the city EDGE where each metro corridor terminates.
+	-- edgeDist: how far along the metro column from a city center to the last lot OUTSIDE
+	--   the city radius. Use ceil so the station is always outside the skip zone.
 	Net:forceUpdateStartupStatusString("Generating Metro System")
+	local function metroEdgeDist(cityRadius, perpOffset)
+		local inner = cityRadius * cityRadius - perpOffset * perpOffset
+		if inner <= 0 then return cityRadius end
+		return math.ceil(math.sqrt(inner) / LSZ) * LSZ
+	end
+	local satEdge  = metroEdgeDist(SAT_CITY_RADIUS,  LSZ)
+	local mainEdge = metroEdgeDist(MAIN_CITY_RADIUS, LSZ)
+
 	for i, sat in ipairs(satellites) do
 		local color = METRO_COLORS[((i - 1) % #METRO_COLORS) + 1]
 		if math.abs(sat.z) >= LSZ then
-			buildMetroNS(LC, Net, W, sat.x + LSZ, sat.z, skipCenters)
+			-- N or S satellite: N/S metro spur at x = sat.x + LSZ
+			local fx = sat.x + LSZ
+			buildMetroNS(LC, Net, W, fx, sat.z, skipCenters)
+			-- Satellite station: city edge where metro arrives (south edge if N, north if S)
+			local satStZ  = sat.z > 0 and (sat.z - satEdge)  or (sat.z + satEdge)
+			-- Main city station: edge metro departs from (north edge for N sat, south for S)
+			local mainStZ = sat.z > 0 and mainEdge or -mainEdge
+			forceHighwayLot(LC, W, fx, satStZ,  "packs/Metros/metrostation" .. color, 'n')
+			forceHighwayLot(LC, W, fx, mainStZ, "packs/Metros/metrostation" .. color, 'n')
 		else
-			buildMetroEW(LC, Net, W, LSZ, sat.x, skipCenters)
+			-- E or W satellite: E/W metro at z = LSZ (1 lot north of backbone)
+			local fz = LSZ
+			buildMetroEW(LC, Net, W, fz, sat.x, skipCenters)
+			-- Satellite station: city edge where metro arrives (west edge if E, east if W)
+			local satStX  = sat.x > 0 and (sat.x - satEdge)  or (sat.x + satEdge)
+			-- Main city station: edge metro departs from (east for E sat, west for W sat)
+			local mainStX = sat.x > 0 and mainEdge or -mainEdge
+			forceHighwayLot(LC, W, satStX,  fz, "packs/Metros/metrostation" .. color, 'n')
+			forceHighwayLot(LC, W, mainStX, fz, "packs/Metros/metrostation" .. color, 'n')
 		end
-		forceHighwayLot(LC, W, sat.x, sat.z, "packs/Metros/metrostation" .. color, 'n')
 		Net:doKeepAlive()
 	end
-	forceHighwayLot(LC, W, 0, 0, "packs/Metros/metrostationred", 'n')
 
 	-- Terrain conforming runs last so a crash here won't kill cities or highways.
 	Net:forceUpdateStartupStatusString("Conforming Roads To Terrain")
