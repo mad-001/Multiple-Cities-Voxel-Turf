@@ -1,0 +1,1 @@
+scripts/server/map_generation/mission_buildings_footprints.lua
