@@ -294,7 +294,6 @@ local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 	local LSZ = turf.Lot.LOT_SIZE
 	local x = LC:getXMin(); x = x - (x % LSZ)
 	local prevSkip = false
-	local tick  = 0
 	local hwTick = 0  -- actual highway lots placed (for off-ramp spacing)
 	local rampSide = 0  -- 0 = north (+z) exit, 1 = south (-z) exit
 	while x <= LC:getXMax() do
@@ -333,8 +332,7 @@ local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 					forceHighwayLot(LC, W, x, rampZ,  rp, 'n')
 					rampSide = 1 - rampSide
 				else
-					path = (tick % 4 == 0) and "packs/vanilla/highroad_e_alt"
-					                       or  "packs/vanilla/highroad_e"
+					path = "packs/vanilla/highroad_e"
 				end
 				hwTick = hwTick + 1
 			else
@@ -346,8 +344,8 @@ local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 			hwTick = 0
 		end
 		prevSkip = skip
-		x = x + LSZ; tick = tick + 1
-		if tick % 64 == 0 then Net:doKeepAlive() end
+		x = x + LSZ
+		if x % (64 * LSZ) == 0 then Net:doKeepAlive() end
 	end
 end
 
@@ -361,7 +359,6 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 	local zStep = goingNorth and LSZ or -LSZ
 	local z = zStep
 	local prevSkip = false
-	local tick  = 0
 	local hwTick = 0
 	local rampSide = 0  -- 0 = east (+x) exit, 1 = west (-x) exit
 	local function pastEnd(cur) return goingNorth and (cur > satZ) or (cur < satZ) end
@@ -399,8 +396,7 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 					forceHighwayLot(LC, W, rampX,  z, rp, 'n')
 					rampSide = 1 - rampSide
 				else
-					path = (tick % 4 == 0) and "packs/vanilla/highroad_n_alt"
-					                       or  "packs/vanilla/highroad_n"
+					path = "packs/vanilla/highroad_n"
 				end
 				hwTick = hwTick + 1
 			else
@@ -413,8 +409,7 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 		end
 		prevSkip = skip
 		z = z + zStep
-		tick = tick + 1
-		if tick % 64 == 0 then Net:doKeepAlive() end
+		if z % (64 * LSZ) == 0 then Net:doKeepAlive() end
 	end
 end
 
