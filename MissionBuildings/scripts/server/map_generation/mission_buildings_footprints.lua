@@ -411,54 +411,37 @@ end
 
 
 -- ─── Part 7: Metro system ────────────────────────────────────────────────────
+-- All r*sub* connecting lots have road surfaces (ROADFLAGS) on top — there are no
+-- pure-underground track lots in this mod. So we place only stations at city edges;
+-- the underground tunnel between them is implied.
+
 local METRO_COLORS = { "blue", "green", "orange", "purple" }
 
-local function placeMetroLot(LC, W, x, z, lotPath)
-	local L = LC:getLotAt(x, z)
-	if not L then return end
-	local vt = L.vtype
-	if vt == turf.Lot.LOT_HIGHWAY then return end
-	if vt ~= turf.Lot.LOT_VACANT and vt ~= turf.Lot.LOT_HILLS
-	   and vt ~= turf.Lot.LOT_SEA and vt ~= turf.Lot.LOT_ROAD then return end
-	local old = vt
-	L:clearData(LC)
-	L.vtype = turf.Lot.LOT_VACANT
-	LC:markUpdate(x, z, old, L.vtype)
-	LC:loadLot(x, z, lotHeight(W, LC, x, z), lotPath, 'n', turf.Lot.LOT_FILL_MODE_NORMAL)
+-- Scan outward from a city center along a N/S metro column (fixed x = metroX)
+-- and return the first lot z that lies OUTSIDE the city radius.
+local function scanStationZ(cx, cz, cityRadius, metroX, goNorth)
+	local LSZ = turf.Lot.LOT_SIZE
+	local step = goNorth and LSZ or -LSZ
+	local z = cz
+	for _ = 1, math.ceil(cityRadius / LSZ) + 4 do
+		z = z + step
+		local dx, dz = metroX - cx, z - cz
+		if dx*dx + dz*dz >= cityRadius*cityRadius then return z end
+	end
+	return z
 end
 
--- N/S underground metro spur running from z=0 toward satZ at fixed x column.
-local function buildMetroNS(LC, Net, W, fx, satZ, skipCenters)
+-- Same but scans along an E/W metro row (fixed z = metroZ, variable x).
+local function scanStationX(cx, cz, cityRadius, metroZ, goEast)
 	local LSZ = turf.Lot.LOT_SIZE
-	local goingNorth = satZ > 0
-	local zStep = goingNorth and LSZ or -LSZ
-	local z = zStep
-	local tick = 0
-	local function pastEnd(cur) return goingNorth and (cur > satZ) or (cur < satZ) end
-	while not pastEnd(z) do
-		if not inCityRadius(fx, z, skipCenters) then
-			placeMetroLot(LC, W, fx, z, "packs/Metros/rnssubns")
-		end
-		z = z + zStep; tick = tick + 1
-		if tick % 64 == 0 then Net:doKeepAlive() end
+	local step = goEast and LSZ or -LSZ
+	local x = cx
+	for _ = 1, math.ceil(cityRadius / LSZ) + 4 do
+		x = x + step
+		local dx, dz = x - cx, metroZ - cz
+		if dx*dx + dz*dz >= cityRadius*cityRadius then return x end
 	end
-end
-
--- E/W underground metro row running from x=0 toward satX at fixed z row.
-local function buildMetroEW(LC, Net, W, fz, satX, skipCenters)
-	local LSZ = turf.Lot.LOT_SIZE
-	local goingEast = satX > 0
-	local xStep = goingEast and LSZ or -LSZ
-	local x = xStep
-	local tick = 0
-	local function pastEnd(cur) return goingEast and (cur > satX) or (cur < satX) end
-	while not pastEnd(x) do
-		if not inCityRadius(x, fz, skipCenters) then
-			placeMetroLot(LC, W, x, fz, "packs/Metros/rewsubew")
-		end
-		x = x + xStep; tick = tick + 1
-		if tick % 64 == 0 then Net:doKeepAlive() end
-	end
+	return x
 end
 
 
@@ -469,9 +452,13 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 	local xMax = LC:getXMax()
 	local zMax = LC:getZMax()
 
-	-- One satellite per ~600 blocks of map half-radius, capped at 4.
-	local nSat = math.min(4, math.max(0, math.floor(xMax / 600)))
-	if nSat == 0 then W:genLotCache(); return end
+	-- Always try all 4 NSEW directions; the minDist check below filters any that
+	-- don't fit on this particular map. Bail early only if even one satellite can't
+	-- possibly be at least minDist from the main city.
+	local nSat = 4
+	if math.min(xMax, zMax) < MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 100 then
+		W:genLotCache(); return
+	end
 
 	local targetDist = MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 800  -- 1800 blocks
 	local minDist    = MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 100  -- 1100 blocks
@@ -531,39 +518,30 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 		end
 	end
 
-	-- Underground metro lines, 1 lot offset from the highway corridors.
-	-- Stations sit at the city EDGE where each metro corridor terminates.
-	-- edgeDist: how far along the metro column from a city center to the last lot OUTSIDE
-	--   the city radius. Use ceil so the station is always outside the skip zone.
+	-- Metro stations at each city edge — two per line, one at the main city
+	-- and one at the satellite. Position found by scanning outward from the city
+	-- center along the metro column until the first lot outside the city radius.
+	-- No corridor lots between stations (all r*sub* connecting lots have road
+	-- surfaces; there are no pure-underground tracks in the metro mod).
 	Net:forceUpdateStartupStatusString("Generating Metro System")
-	local function metroEdgeDist(cityRadius, perpOffset)
-		local inner = cityRadius * cityRadius - perpOffset * perpOffset
-		if inner <= 0 then return cityRadius end
-		return math.ceil(math.sqrt(inner) / LSZ) * LSZ
-	end
-	local satEdge  = metroEdgeDist(SAT_CITY_RADIUS,  LSZ)
-	local mainEdge = metroEdgeDist(MAIN_CITY_RADIUS, LSZ)
-
 	for i, sat in ipairs(satellites) do
 		local color = METRO_COLORS[((i - 1) % #METRO_COLORS) + 1]
 		if math.abs(sat.z) >= LSZ then
-			-- N or S satellite: N/S metro spur at x = sat.x + LSZ
+			-- N or S satellite: metro column 1 lot east of the highway spur
 			local fx = sat.x + LSZ
-			buildMetroNS(LC, Net, W, fx, sat.z, skipCenters)
-			-- Satellite station: city edge where metro arrives (south edge if N, north if S)
-			local satStZ  = sat.z > 0 and (sat.z - satEdge)  or (sat.z + satEdge)
-			-- Main city station: edge metro departs from (north edge for N sat, south for S)
-			local mainStZ = sat.z > 0 and mainEdge or -mainEdge
+			-- Satellite station: edge facing the main city
+			local satStZ  = scanStationZ(sat.x, sat.z, SAT_CITY_RADIUS,  fx, sat.z < 0)
+			-- Main city station: edge facing the satellite
+			local mainStZ = scanStationZ(0,     0,     MAIN_CITY_RADIUS, fx, sat.z > 0)
 			forceHighwayLot(LC, W, fx, satStZ,  "packs/Metros/metrostation" .. color, 'n')
 			forceHighwayLot(LC, W, fx, mainStZ, "packs/Metros/metrostation" .. color, 'n')
 		else
-			-- E or W satellite: E/W metro at z = LSZ (1 lot north of backbone)
+			-- E or W satellite: metro row 1 lot north of the backbone
 			local fz = LSZ
-			buildMetroEW(LC, Net, W, fz, sat.x, skipCenters)
-			-- Satellite station: city edge where metro arrives (west edge if E, east if W)
-			local satStX  = sat.x > 0 and (sat.x - satEdge)  or (sat.x + satEdge)
-			-- Main city station: edge metro departs from (east for E sat, west for W sat)
-			local mainStX = sat.x > 0 and mainEdge or -mainEdge
+			-- Satellite station: edge facing the main city
+			local satStX  = scanStationX(sat.x, sat.z, SAT_CITY_RADIUS,  fz, sat.x < 0)
+			-- Main city station: edge facing the satellite
+			local mainStX = scanStationX(0,     0,     MAIN_CITY_RADIUS, fz, sat.x > 0)
 			forceHighwayLot(LC, W, satStX,  fz, "packs/Metros/metrostation" .. color, 'n')
 			forceHighwayLot(LC, W, mainStX, fz, "packs/Metros/metrostation" .. color, 'n')
 		end
