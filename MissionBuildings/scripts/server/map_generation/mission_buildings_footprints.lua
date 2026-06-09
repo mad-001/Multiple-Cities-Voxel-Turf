@@ -410,7 +410,59 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 end
 
 
--- ─── Part 7: OnMapGen_extra ───────────────────────────────────────────────────
+-- ─── Part 7: Metro system ────────────────────────────────────────────────────
+local METRO_COLORS = { "blue", "green", "orange", "purple" }
+
+local function placeMetroLot(LC, W, x, z, lotPath)
+	local L = LC:getLotAt(x, z)
+	if not L then return end
+	local vt = L.vtype
+	if vt == turf.Lot.LOT_HIGHWAY then return end
+	if vt ~= turf.Lot.LOT_VACANT and vt ~= turf.Lot.LOT_HILLS
+	   and vt ~= turf.Lot.LOT_SEA and vt ~= turf.Lot.LOT_ROAD then return end
+	local old = vt
+	L:clearData(LC)
+	L.vtype = turf.Lot.LOT_VACANT
+	LC:markUpdate(x, z, old, L.vtype)
+	LC:loadLot(x, z, lotHeight(W, LC, x, z), lotPath, 'n', turf.Lot.LOT_FILL_MODE_NORMAL)
+end
+
+-- N/S underground metro spur running from z=0 toward satZ at fixed x column.
+local function buildMetroNS(LC, Net, W, fx, satZ, skipCenters)
+	local LSZ = turf.Lot.LOT_SIZE
+	local goingNorth = satZ > 0
+	local zStep = goingNorth and LSZ or -LSZ
+	local z = zStep
+	local tick = 0
+	local function pastEnd(cur) return goingNorth and (cur > satZ) or (cur < satZ) end
+	while not pastEnd(z) do
+		if not inCityRadius(fx, z, skipCenters) then
+			placeMetroLot(LC, W, fx, z, "packs/Metros/rnssubns")
+		end
+		z = z + zStep; tick = tick + 1
+		if tick % 64 == 0 then Net:doKeepAlive() end
+	end
+end
+
+-- E/W underground metro row running from x=0 toward satX at fixed z row.
+local function buildMetroEW(LC, Net, W, fz, satX, skipCenters)
+	local LSZ = turf.Lot.LOT_SIZE
+	local goingEast = satX > 0
+	local xStep = goingEast and LSZ or -LSZ
+	local x = xStep
+	local tick = 0
+	local function pastEnd(cur) return goingEast and (cur > satX) or (cur < satX) end
+	while not pastEnd(x) do
+		if not inCityRadius(x, fz, skipCenters) then
+			placeMetroLot(LC, W, x, fz, "packs/Metros/rewsubew")
+		end
+		x = x + xStep; tick = tick + 1
+		if tick % 64 == 0 then Net:doKeepAlive() end
+	end
+end
+
+
+-- ─── Part 8: OnMapGen_extra ───────────────────────────────────────────────────
 customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 	local Net = turf.NetworkHandler.getInstance()
 	local LSZ  = turf.Lot.LOT_SIZE
@@ -478,6 +530,22 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 			Net:doKeepAlive()
 		end
 	end
+
+	-- Underground metro lines, 1 lot offset from the highway corridors.
+	-- Each N/S satellite gets a spur at sat.x+LSZ; E/W satellites share a row at z=LSZ.
+	-- Metro lots inside city radii are skipped (tunnel goes underground through cities).
+	Net:forceUpdateStartupStatusString("Generating Metro System")
+	for i, sat in ipairs(satellites) do
+		local color = METRO_COLORS[((i - 1) % #METRO_COLORS) + 1]
+		if math.abs(sat.z) >= LSZ then
+			buildMetroNS(LC, Net, W, sat.x + LSZ, sat.z, skipCenters)
+		else
+			buildMetroEW(LC, Net, W, LSZ, sat.x, skipCenters)
+		end
+		forceHighwayLot(LC, W, sat.x, sat.z, "packs/Metros/metrostation" .. color, 'n')
+		Net:doKeepAlive()
+	end
+	forceHighwayLot(LC, W, 0, 0, "packs/Metros/metrostationred", 'n')
 
 	-- Terrain conforming runs last so a crash here won't kill cities or highways.
 	Net:forceUpdateStartupStatusString("Conforming Roads To Terrain")
