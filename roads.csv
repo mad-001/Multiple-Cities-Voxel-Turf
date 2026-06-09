@@ -1,0 +1,202 @@
+lot_path,display_name,source,connects_N,connects_S,connects_E,connects_W,highway_N,highway_S,highway_E,highway_W,traffic_lights,yoffset,size_lots,notes
+# ─── VANILLA IN-CITY ROADS (road/r/ and road/rf/ — terrain-conforming vs flat) ───
+# Each lot name works with BOTH prefixes: road/r/<name> (slopes OK) and road/rf/<name> (forced flat)
+# rcl = canal-level variant; rfl = flat canal variant
+road/r/neven,Road N/S (even),vanilla,1,1,0,0,0,0,0,0,0,0,1,Visual alt A — use at even lot positions
+road/r/nodd,Road N/S (odd),vanilla,1,1,0,0,0,0,0,0,0,0,1,Visual alt B — use at odd lot positions
+road/r/eeven,Road E/W (even),vanilla,0,0,1,1,0,0,0,0,0,0,1,Visual alt A
+road/r/eodd,Road E/W (odd),vanilla,0,0,1,1,0,0,0,0,0,0,1,Visual alt B
+road/r/cross,Road Cross,vanilla,1,1,1,1,0,0,0,0,0,0,1,4-way intersection no TL
+road/r/crossns,Road Cross N/S,vanilla,1,1,1,1,0,0,0,0,0,0,1,4-way with NS median stripe
+road/r/crossew,Road Cross E/W,vanilla,1,1,1,1,0,0,0,0,0,0,1,4-way with EW median stripe
+road/r/crosstl,Road Cross TL,vanilla,1,1,1,1,0,0,0,0,1,0,1,4-way with traffic lights
+road/r/cne,Road Corner NE,vanilla,1,0,1,0,0,0,0,0,0,0,1,
+road/r/cnw,Road Corner NW,vanilla,1,0,0,1,0,0,0,0,0,0,1,
+road/r/cse,Road Corner SE,vanilla,0,1,1,0,0,0,0,0,0,0,1,
+road/r/csw,Road Corner SW,vanilla,0,1,0,1,0,0,0,0,0,0,1,
+road/r/jnew,Road T-Junction N+E+W,vanilla,1,0,1,1,0,0,0,0,0,0,1,Missing S
+road/r/jnse,Road T-Junction N+S+E,vanilla,1,1,1,0,0,0,0,0,0,0,1,Missing W
+road/r/jnsw,Road T-Junction N+S+W,vanilla,1,1,0,1,0,0,0,0,0,0,1,Missing E
+road/r/jsew,Road T-Junction S+E+W,vanilla,0,1,1,1,0,0,0,0,0,0,1,Missing N
+road/r/rampup1,Terrain Ramp Up,vanilla,1,1,0,0,0,0,0,0,0,0,4,"Placed at low end; visually spans 4 lots N/S. Game places piece at start lot, caller must clear 3 following lots"
+road/r/rampdown1,Terrain Ramp Down,vanilla,1,1,0,0,0,0,0,0,0,0,4,Placed at high end; spans 4 lots N/S descending
+# rf/ prefix = same pieces forced to flat terrain (no slope adaptation)
+road/rf/neven,Road N/S Flat (even),vanilla,1,1,0,0,0,0,0,0,0,0,1,Flat forced
+road/rf/nodd,Road N/S Flat (odd),vanilla,1,1,0,0,0,0,0,0,0,0,1,Flat forced
+road/rf/eeven,Road E/W Flat (even),vanilla,0,0,1,1,0,0,0,0,0,0,1,Flat forced
+road/rf/eodd,Road E/W Flat (odd),vanilla,0,0,1,1,0,0,0,0,0,0,1,Flat forced
+road/rf/cross,Road Cross Flat,vanilla,1,1,1,1,0,0,0,0,0,0,1,
+road/rf/crossns,Road Cross Flat N/S,vanilla,1,1,1,1,0,0,0,0,0,0,1,
+road/rf/crossew,Road Cross Flat E/W,vanilla,1,1,1,1,0,0,0,0,0,0,1,
+road/rf/crosstl,Road Cross Flat TL,vanilla,1,1,1,1,0,0,0,0,1,0,1,
+road/rf/cne,Road Corner Flat NE,vanilla,1,0,1,0,0,0,0,0,0,0,1,
+road/rf/cnw,Road Corner Flat NW,vanilla,1,0,0,1,0,0,0,0,0,0,1,
+road/rf/cse,Road Corner Flat SE,vanilla,0,1,1,0,0,0,0,0,0,0,1,
+road/rf/csw,Road Corner Flat SW,vanilla,0,1,0,1,0,0,0,0,0,0,1,
+road/rf/jnew,Road T-Junction Flat N+E+W,vanilla,1,0,1,1,0,0,0,0,0,0,1,Missing S
+road/rf/jnse,Road T-Junction Flat N+S+E,vanilla,1,1,1,0,0,0,0,0,0,0,1,Missing W
+road/rf/jnsw,Road T-Junction Flat N+S+W,vanilla,1,1,0,1,0,0,0,0,0,0,1,Missing E
+road/rf/jsew,Road T-Junction Flat S+E+W,vanilla,0,1,1,1,0,0,0,0,0,0,1,Missing N
+road/rf/rampup1,Terrain Ramp Up Flat,vanilla,1,1,0,0,0,0,0,0,0,0,4,Flat forced; spans 4 lots N/S
+road/rf/rampdown1,Terrain Ramp Down Flat,vanilla,1,1,0,0,0,0,0,0,0,0,4,Flat forced
+# rcl/ = canal-level (YOFFSET -3 area) variants
+road/rcl/neven,Canal Road N/S (even),vanilla,1,1,0,0,0,0,0,0,0,-3,1,
+road/rcl/nodd,Canal Road N/S (odd),vanilla,1,1,0,0,0,0,0,0,0,-3,1,
+road/rcl/eeven,Canal Road E/W (even),vanilla,0,0,1,1,0,0,0,0,0,-3,1,
+road/rcl/eodd,Canal Road E/W (odd),vanilla,0,0,1,1,0,0,0,0,0,-3,1,
+road/rcl/cross,Canal Road Cross,vanilla,1,1,1,1,0,0,0,0,0,-3,1,
+road/rcl/crosstl,Canal Road Cross TL,vanilla,1,1,1,1,0,0,0,0,1,-3,1,
+road/rcl/cne,Canal Road Corner NE,vanilla,1,0,1,0,0,0,0,0,0,-3,1,
+road/rcl/cnw,Canal Road Corner NW,vanilla,1,0,0,1,0,0,0,0,0,-3,1,
+road/rcl/cse,Canal Road Corner SE,vanilla,0,1,1,0,0,0,0,0,0,-3,1,
+road/rcl/csw,Canal Road Corner SW,vanilla,0,1,0,1,0,0,0,0,0,-3,1,
+road/rcl/jnew,Canal Road T N+E+W,vanilla,1,0,1,1,0,0,0,0,0,-3,1,
+road/rcl/jnse,Canal Road T N+S+E,vanilla,1,1,1,0,0,0,0,0,0,-3,1,
+road/rcl/jnsw,Canal Road T N+S+W,vanilla,1,1,0,1,0,0,0,0,0,-3,1,
+road/rcl/jsew,Canal Road T S+E+W,vanilla,0,1,1,1,0,0,0,0,0,-3,1,
+road/rcl/rampup1,Canal Road Ramp Up,vanilla,1,1,0,0,0,0,0,0,0,-3,4,
+road/rcl/rampdown1,Canal Road Ramp Down,vanilla,1,1,0,0,0,0,0,0,0,-3,4,
+# rfl/ = flat canal-level variants (same as rcl but flat forced)
+# (same set as rcl — omitted for brevity; prefix road/rfl/ mirrors road/rcl/)
+# ─── VANILLA PACK ROAD LOTS (packs/vanilla/) ───────────────────────────────────
+packs/vanilla/road_crosstl,Road Cross TL,vanilla-pack,1,1,1,1,0,0,0,0,1,0,1,Standard 4-way with traffic lights; FORCEROT E
+packs/vanilla/road_jnew_tl,Road T TL N+E+W,vanilla-pack,1,0,1,1,0,0,0,0,1,0,1,Missing S; FORCEROT E
+packs/vanilla/road_jnse_tl,Road T TL N+S+E,vanilla-pack,1,1,1,0,0,0,0,0,1,0,1,Missing W; FORCEROT E
+packs/vanilla/road_jsew_tl,Road T TL S+E+W,vanilla-pack,0,1,1,1,0,0,0,0,1,0,1,Missing N; FORCEROT E
+packs/vanilla/road_jnsw_tl,Road T TL N+S+W,vanilla-pack,1,1,0,1,0,0,0,0,1,0,1,Missing E; FORCEROT E
+# ─── VANILLA HIGHWAY LOTS (packs/vanilla/) ─────────────────────────────────────
+# H suffix in highway connections = elevated highway height (not road level)
+packs/vanilla/highroad_n,Highway N/S,vanilla-pack,0,0,0,0,1,1,0,0,0,0,1,Elevated; ALT_AVAIL (highroad_n_alt exists)
+packs/vanilla/highroad_n_alt,Highway N/S Alt,vanilla-pack,0,0,0,0,1,1,0,0,0,0,1,Elevated alt (lit lamppost variant)
+packs/vanilla/highroad_e,Highway E/W,vanilla-pack,0,0,0,0,0,0,1,1,0,0,1,Elevated; ALT_AVAIL
+packs/vanilla/highroad_e_alt,Highway E/W Alt,vanilla-pack,0,0,0,0,0,0,1,1,0,0,1,Elevated alt
+packs/vanilla/highroad_ns_pass,Highway N/S + Underpass E/W,vanilla-pack,1,1,0,0,1,1,0,0,0,0,1,"Highway N/S elevated; road E/W passes underneath at road level"
+packs/vanilla/highroad_ew_pass,Highway E/W + Underpass N/S,vanilla-pack,0,0,1,1,0,0,1,1,0,0,1,"Highway E/W elevated; road N/S passes underneath"
+packs/vanilla/highroad_crosstl,Highway Cross TL,vanilla-pack,0,0,0,0,1,1,1,1,1,0,1,4-way elevated highway junction with TL
+packs/vanilla/highroad_jnew_tl,Highway T TL N+E+W,vanilla-pack,0,0,0,0,1,0,1,1,1,0,1,Missing S; for N spur from backbone or both-E/W backbone junctions
+packs/vanilla/highroad_jnse_tl,Highway T TL N+S+E,vanilla-pack,0,0,0,0,1,1,1,0,1,0,1,Missing W; for E off-ramp exit from N/S spur
+packs/vanilla/highroad_jsew_tl,Highway T TL S+E+W,vanilla-pack,0,0,0,0,0,1,1,1,1,0,1,Missing N; for S spur from backbone
+packs/vanilla/highroad_jnsw_tl,Highway T TL N+S+W,vanilla-pack,0,0,0,0,1,1,0,1,1,0,1,Missing E; for W off-ramp exit from N/S spur
+packs/vanilla/highroad_cne,Highway Corner NE,vanilla-pack,0,0,0,0,1,0,1,0,1,0,1,90-degree elevated turn N→E
+packs/vanilla/highroad_cse,Highway Corner SE,vanilla-pack,0,0,0,0,0,1,1,0,1,0,1,90-degree elevated turn S→E
+packs/vanilla/highroad_csw,Highway Corner SW,vanilla-pack,0,0,0,0,0,1,0,1,1,0,1,90-degree elevated turn S→W
+packs/vanilla/highroad_cnw,Highway Corner NW,vanilla-pack,0,0,0,0,1,0,0,1,1,0,1,90-degree elevated turn N→W
+packs/vanilla/hramp1,Highway Ramp 1 (S→highway N),vanilla-pack,0,1,0,0,1,0,0,0,0,0,1,"Road on south; highway on north. Going northward: enter from road, exit to highway"
+packs/vanilla/hramp2,Highway Ramp 2 (E→highway W),vanilla-pack,0,0,1,0,0,0,0,1,0,0,1,"Road on east; highway on west. Going westward: enter from road, exit to highway"
+packs/vanilla/hramp3,Highway Ramp 3 (N→highway S),vanilla-pack,1,0,0,0,0,1,0,0,0,0,1,"Road on north; highway on south. Going southward: enter from road, exit to highway"
+packs/vanilla/hramp4,Highway Ramp 4 (W→highway E),vanilla-pack,0,0,0,1,0,0,1,0,0,0,1,"Road on west; highway on east. Going eastward: enter from road, exit to highway"
+packs/vanilla/highroad_canal_n,Highway N/S over Canal,vanilla-pack,0,0,0,0,1,1,0,0,0,-3,1,Elevated highway bridge over water; YOFFSET -3
+packs/vanilla/highroad_canal_e,Highway E/W over Canal,vanilla-pack,0,0,0,0,0,0,1,1,0,-3,1,Elevated highway bridge over water; YOFFSET -3
+# ─── URBAN RENEWAL KIT MOD (packs/Urban Renewal Kit/) ─────────────────────────
+# Workshop ID: 2963501169 — by JStheguy
+# jshigh_* = JS-style highway (visual alternative to vanilla highroad_*)
+# jsroad_* = JS-style urban road (visual alternative to vanilla road/r/* pieces)
+# jsroad_a* = JS urban road blended with vanilla road (transition pieces)
+packs/Urban Renewal Kit/jshigh_ns,JS Highway N/S,URK,0,0,0,0,1,1,0,0,0,0,1,ALT_AVAIL
+packs/Urban Renewal Kit/jshigh_ew,JS Highway E/W,URK,0,0,0,0,0,0,1,1,0,0,1,ALT_AVAIL
+packs/Urban Renewal Kit/jshigh_ons,JS Highway N/S + Underpass E/W,URK,1,1,0,0,1,1,0,0,0,0,1,
+packs/Urban Renewal Kit/jshigh_oew,JS Highway E/W + Underpass N/S,URK,0,0,1,1,0,0,1,1,0,0,1,
+packs/Urban Renewal Kit/jshigh_cross,JS Highway Cross,URK,0,0,0,0,1,1,1,1,1,0,1,4-way elevated with TL
+packs/Urban Renewal Kit/jshigh_jn,JS Highway Junction N+E+W,URK,0,0,0,0,1,0,1,1,1,0,1,Missing S
+packs/Urban Renewal Kit/jshigh_je,JS Highway Junction N+S+E,URK,0,0,0,0,1,1,1,0,1,0,1,Missing W
+packs/Urban Renewal Kit/jshigh_js,JS Highway Junction S+E+W,URK,0,0,0,0,0,1,1,1,1,0,1,Missing N
+packs/Urban Renewal Kit/jshigh_jw,JS Highway Junction N+S+W,URK,0,0,0,0,1,1,0,1,1,0,1,Missing E
+packs/Urban Renewal Kit/jshigh_cne,JS Highway Corner NE,URK,0,0,0,0,1,0,1,0,0,0,1,
+packs/Urban Renewal Kit/jshigh_cse,JS Highway Corner SE,URK,0,0,0,0,0,1,1,0,0,0,1,
+packs/Urban Renewal Kit/jshigh_csw,JS Highway Corner SW,URK,0,0,0,0,0,1,0,1,0,0,1,
+packs/Urban Renewal Kit/jshigh_cnw,JS Highway Corner NW,URK,0,0,0,0,1,0,0,1,0,0,1,
+packs/Urban Renewal Kit/jshigh_ramp1,JS Highway Ramp 1 (S→N),URK,0,1,0,0,1,0,0,0,0,0,1,Road S; highway N
+packs/Urban Renewal Kit/jshigh_ramp2,JS Highway Ramp 2 (E→W),URK,0,0,1,0,0,0,0,1,0,0,1,Road E; highway W
+packs/Urban Renewal Kit/jshigh_ramp3,JS Highway Ramp 3 (N→S),URK,1,0,0,0,0,1,0,0,0,0,1,Road N; highway S
+packs/Urban Renewal Kit/jshigh_ramp4,JS Highway Ramp 4 (W→E),URK,0,0,0,1,0,0,1,0,0,0,1,Road W; highway E
+packs/Urban Renewal Kit/jshigh_canal_ew,JS Highway Bridge N/S,URK,0,0,0,0,1,1,0,0,0,-4,1,Canal bridge YOFFSET -4; note: pack name says E/W but flags are NH/SH
+packs/Urban Renewal Kit/jshigh_canal_ns,JS Highway Bridge E/W,URK,0,0,0,0,0,0,1,1,0,-4,1,Canal bridge YOFFSET -4
+packs/Urban Renewal Kit/jsroad_ns,JS Urban Road N/S,URK,1,1,0,0,0,0,0,0,0,0,1,ALT_AVAIL
+packs/Urban Renewal Kit/jsroad_ns_alt,JS Urban Road N/S Alt,URK,1,1,0,0,0,0,0,0,0,0,1,
+packs/Urban Renewal Kit/jsroad_ew,JS Urban Road E/W,URK,0,0,1,1,0,0,0,0,0,0,1,ALT_AVAIL
+packs/Urban Renewal Kit/jsroad_ew_alt,JS Urban Road E/W Alt,URK,0,0,1,1,0,0,0,0,0,0,1,
+packs/Urban Renewal Kit/jsroad_cross,JS Urban Road Cross,URK,1,1,1,1,0,0,0,0,0,0,1,No TL
+packs/Urban Renewal Kit/jsroad_jn,JS Urban Road T N+E+W,URK,1,0,1,1,0,0,0,0,1,0,1,TL; Missing S
+packs/Urban Renewal Kit/jsroad_je,JS Urban Road T N+S+E,URK,1,1,1,0,0,0,0,0,1,0,1,TL; Missing W
+packs/Urban Renewal Kit/jsroad_js,JS Urban Road T S+E+W,URK,0,1,1,1,0,0,0,0,1,0,1,TL; Missing N
+packs/Urban Renewal Kit/jsroad_jw,JS Urban Road T N+S+W,URK,1,1,0,1,0,0,0,0,1,0,1,TL; Missing E
+packs/Urban Renewal Kit/jsroad_cne,JS Urban Road Corner NE,URK,1,0,1,0,0,0,0,0,0,0,1,
+packs/Urban Renewal Kit/jsroad_cse,JS Urban Road Corner SE,URK,0,1,1,0,0,0,0,0,0,0,1,
+packs/Urban Renewal Kit/jsroad_csw,JS Urban Road Corner SW,URK,0,1,0,1,0,0,0,0,0,0,1,
+packs/Urban Renewal Kit/jsroad_cnw,JS Urban Road Corner NW,URK,1,0,0,1,0,0,0,0,0,0,1,
+packs/Urban Renewal Kit/jsroad_an,JS Urban+Vanilla T N+E+W,URK,1,0,1,1,0,0,0,0,1,0,1,"Blended visual — JS road meets vanilla road; TL"
+packs/Urban Renewal Kit/jsroad_ae,JS Urban+Vanilla T N+S+E,URK,1,1,1,0,0,0,0,0,1,0,1,TL
+packs/Urban Renewal Kit/jsroad_as,JS Urban+Vanilla T S+E+W,URK,0,1,1,1,0,0,0,0,1,0,1,TL
+packs/Urban Renewal Kit/jsroad_aw,JS Urban+Vanilla T N+S+W,URK,1,1,0,1,0,0,0,0,1,0,1,TL
+packs/Urban Renewal Kit/jsroad_ans,JS Urban+Vanilla Cross (NS blend),URK,1,1,1,1,0,0,0,0,1,0,1,Full cross with TL; NS side is JS style
+packs/Urban Renewal Kit/jsroad_aew,JS Urban+Vanilla Cross (EW blend),URK,1,1,1,1,0,0,0,0,1,0,1,Full cross with TL; EW side is JS style
+packs/Urban Renewal Kit/js_ind_rail_overpass_ns,Freight Rail Overpass N/S,URK,1,1,0,0,0,0,0,0,0,-7,1,Road over freight rail; YOFFSET -7
+packs/Urban Renewal Kit/js_ind_rail_overpass_ew,Freight Rail Overpass E/W,URK,0,0,1,1,0,0,0,0,0,-7,1,YOFFSET -7
+packs/Urban Renewal Kit/js_ind_rail_high_overpass_ns,Freight Rail Highway Overpass N/S,URK,0,0,0,0,1,1,0,0,0,-7,1,Highway over freight rail; YOFFSET -7
+packs/Urban Renewal Kit/js_ind_rail_high_overpass_ew,Freight Rail Highway Overpass E/W,URK,0,0,0,0,0,0,1,1,0,-7,1,YOFFSET -7
+# ─── METROS MOD (packs/Metros/) ────────────────────────────────────────────────
+# Workshop ID: 1781089616 — by Nikolai_Bukav
+# ALL r*sub* lots have ROADFLAGS = road surface on top + underground tunnel below (YOFFSET -7)
+# The road surface connects at normal road level; subway is implied underground
+# rnssubXX = road N/S on top over sub XX configuration
+# rewsubXX = road E/W on top over sub XX configuration
+# rnesubXX = road NE corner on top over sub XX; etc.
+packs/Metros/rnssubns,Road N/S over Sub N/S,Metros,1,1,0,0,0,0,0,0,0,-7,1,Primary straight N/S track tile
+packs/Metros/rewsubew,Road E/W over Sub E/W,Metros,0,0,1,1,0,0,0,0,0,-7,1,Primary straight E/W track tile
+packs/Metros/rnesubne,Road NE over Sub NE,Metros,1,0,1,0,0,0,0,0,0,-7,1,Corner road+sub
+packs/Metros/rsesubse,Road SE over Sub SE,Metros,0,1,1,0,0,0,0,0,0,-7,1,
+packs/Metros/rswsubsw,Road SW over Sub SW,Metros,0,1,0,1,0,0,0,0,0,-7,1,
+packs/Metros/rnwsubnw,Road NW over Sub NW,Metros,1,0,0,1,0,0,0,0,0,-7,1,
+packs/Metros/rnewsubnew,Road N/E/W over Sub N/E/W,Metros,1,0,1,1,0,0,0,0,0,-7,1,T-junction
+packs/Metros/rnsesubnse,Road N/S/E over Sub N/S/E,Metros,1,1,1,0,0,0,0,0,0,-7,1,T-junction
+packs/Metros/rsewsubsew,Road S/E/W over Sub S/E/W,Metros,0,1,1,1,0,0,0,0,0,-7,1,T-junction
+packs/Metros/rnswsubnsw,Road N/S/W over Sub N/S/W,Metros,1,1,0,1,0,0,0,0,0,-7,1,T-junction
+packs/Metros/r4wayasubnsew,Road 4-Way over Sub N/S/E/W,Metros,1,1,1,1,0,0,0,0,0,-7,1,4-way cross no TL
+packs/Metros/r4waybsubnsew,Road 4-Way TL over Sub N/S/E/W,Metros,1,1,1,1,0,0,0,0,1,-7,1,4-way cross with TL
+packs/Metros/rnssubente,Road N/S Metro Entry E,Metros,1,1,0,0,0,0,0,0,0,-7,1,Station entrance on east side of NS road
+packs/Metros/rnssubentw,Road N/S Metro Entry W,Metros,1,1,0,0,0,0,0,0,0,-7,1,Station entrance on west side
+packs/Metros/rnssubentew,Road N/S Metro Entry E+W,Metros,1,1,0,0,0,0,0,0,0,-7,1,Both sides
+packs/Metros/rewsubentn,Road E/W Metro Entry N,Metros,0,0,1,1,0,0,0,0,0,-7,1,Station entrance on north side of EW road
+packs/Metros/rewsubents,Road E/W Metro Entry S,Metros,0,0,1,1,0,0,0,0,0,-7,1,South side
+packs/Metros/rewsubentns,Road E/W Metro Entry N+S,Metros,0,0,1,1,0,0,0,0,0,-7,1,Both sides
+# Remaining rnssubXX / rewsubXX = road N/S or E/W on top over various sub configs
+# (sub config in name suffix is purely cosmetic — road-level connections only)
+# rnssubew = NS road over EW sub (crossing); rnssubne = NS road over NE sub; etc.
+# All have same road connection as rnssubns (N+S) regardless of sub suffix
+packs/Metros/rnssubew,Road N/S over Sub E/W (crossing),Metros,1,1,0,0,0,0,0,0,0,-7,1,Underground crossing visible through grates
+packs/Metros/rnssubne,Road N/S over Sub N/E,Metros,1,1,0,0,0,0,0,0,0,-7,1,
+packs/Metros/rnssubse,Road N/S over Sub S/E,Metros,1,1,0,0,0,0,0,0,0,-7,1,
+packs/Metros/rnssubsw,Road N/S over Sub S/W,Metros,1,1,0,0,0,0,0,0,0,-7,1,
+packs/Metros/rnssub nw,Road N/S over Sub N/W,Metros,1,1,0,0,0,0,0,0,0,-7,1,
+packs/Metros/rnssubnew,Road N/S over Sub N/E/W,Metros,1,1,0,0,0,0,0,0,0,-7,1,
+packs/Metros/rnssubnse,Road N/S over Sub N/S/E,Metros,1,1,0,0,0,0,0,0,0,-7,1,
+packs/Metros/rnssubsew,Road N/S over Sub S/E/W,Metros,1,1,0,0,0,0,0,0,0,-7,1,
+packs/Metros/rnssubnsw,Road N/S over Sub N/S/W,Metros,1,1,0,0,0,0,0,0,0,-7,1,
+packs/Metros/rnssubnsew,Road N/S over Sub N/S/E/W,Metros,1,1,0,0,0,0,0,0,0,-7,1,
+packs/Metros/rewsubns,Road E/W over Sub N/S (crossing),Metros,0,0,1,1,0,0,0,0,0,-7,1,
+packs/Metros/rewsubne,Road E/W over Sub N/E,Metros,0,0,1,1,0,0,0,0,0,-7,1,
+packs/Metros/rewsubse,Road E/W over Sub S/E,Metros,0,0,1,1,0,0,0,0,0,-7,1,
+packs/Metros/rewsubsw,Road E/W over Sub S/W,Metros,0,0,1,1,0,0,0,0,0,-7,1,
+packs/Metros/rewsubnw,Road E/W over Sub N/W,Metros,0,0,1,1,0,0,0,0,0,-7,1,
+packs/Metros/rewsubnew,Road E/W over Sub N/E/W,Metros,0,0,1,1,0,0,0,0,0,-7,1,
+packs/Metros/rewsubnse,Road E/W over Sub N/S/E,Metros,0,0,1,1,0,0,0,0,0,-7,1,
+packs/Metros/rewsubsew,Road E/W over Sub S/E/W,Metros,0,0,1,1,0,0,0,0,0,-7,1,
+packs/Metros/rewsubnsw,Road E/W over Sub N/S/W,Metros,0,0,1,1,0,0,0,0,0,-7,1,
+packs/Metros/rewsubnsew,Road E/W over Sub N/S/E/W,Metros,0,0,1,1,0,0,0,0,0,-7,1,
+# Metro station lots — COMMERCE type NOSPAWN underground; NO ROADFLAGS (not road-connected)
+packs/Metros/metrostationred,Metro Station (Red),Metros,0,0,0,0,0,0,0,0,0,-7,1,No road connections; underground building
+packs/Metros/metrostationblue,Metro Station (Blue),Metros,0,0,0,0,0,0,0,0,0,-7,1,
+packs/Metros/metrostationgreen,Metro Station (Green),Metros,0,0,0,0,0,0,0,0,0,-7,1,
+packs/Metros/metrostationorange,Metro Station (Orange),Metros,0,0,0,0,0,0,0,0,0,-7,1,
+packs/Metros/metrostationpurple,Metro Station (Purple),Metros,0,0,0,0,0,0,0,0,0,-7,1,
+packs/Metros/metrostationyellow,Metro Station (Yellow),Metros,0,0,0,0,0,0,0,0,0,-7,1,
+# Metro elevated lots — no ROADFLAGS (no AI navigation)
+packs/Metros/metrohighns,Metro Elevated N/S,Metros,0,0,0,0,0,0,0,0,0,0,1,Elevated above-ground metro track; no road connections
+packs/Metros/metrohighew,Metro Elevated E/W,Metros,0,0,0,0,0,0,0,0,0,0,1,
+packs/Metros/metrohighnsorew,Metro High N/S Over Road E/W,Metros,0,0,1,1,0,0,0,0,0,0,1,Elevated metro N/S; road passes E/W underneath at road level
+packs/Metros/metrohigheworns,Metro High E/W Over Road N/S,Metros,1,1,0,0,0,0,0,0,0,0,1,Elevated metro E/W; road passes N/S underneath
+# Subramp lots — transition pieces from underground to surface; no ROADFLAGS
+packs/Metros/subrampnhsl,Sub Ramp N→surface (L),Metros,0,0,0,0,0,0,0,0,0,-7,1,Underground ramp emerging northward left variant
+packs/Metros/subrampehwl,Sub Ramp E→surface (L),Metros,0,0,0,0,0,0,0,0,0,-7,1,
+packs/Metros/subrampshNl,Sub Ramp S→surface (L),Metros,0,0,0,0,0,0,0,0,0,-7,1,
+packs/Metros/subrampwhel,Sub Ramp W→surface (L),Metros,0,0,0,0,0,0,0,0,0,-7,1,

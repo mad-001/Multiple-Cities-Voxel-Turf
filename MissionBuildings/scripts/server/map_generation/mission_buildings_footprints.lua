@@ -317,14 +317,21 @@ local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 				path = "packs/vanilla/highroad_canal_e"
 				hwTick = hwTick + 1
 			elseif hwTick > 0 and hwTick % 50 == 0 and not nextSkip and not nextJunc then
-				-- off-ramp: T-junction here + ramp one lot to the N or S
-				local rampZ = (rampSide == 0) and (fz + LSZ) or (fz - LSZ)
-				if not inCityRadius(x, rampZ, skipCenters) then
+				-- off-ramp: T-junction → 2 approach lots → ramp (3 lots total)
+				local rampDir = rampSide == 0 and 1 or -1
+				local appr1Z  = fz + rampDir * LSZ
+				local appr2Z  = fz + rampDir * 2 * LSZ
+				local rampZ   = fz + rampDir * 3 * LSZ
+				if not inCityRadius(x, appr1Z, skipCenters)
+				   and not inCityRadius(x, appr2Z, skipCenters)
+				   and not inCityRadius(x, rampZ,  skipCenters) then
 					path = (rampSide == 0) and "packs/vanilla/highroad_jnew_tl"
 					                       or  "packs/vanilla/highroad_jsew_tl"
 					local rp = (rampSide == 0) and "packs/vanilla/hramp3"
 					                           or  "packs/vanilla/hramp1"
-					forceHighwayLot(LC, W, x, rampZ, rp, 'n')
+					forceHighwayLot(LC, W, x, appr1Z, "packs/vanilla/highroad_n", 'n')
+					forceHighwayLot(LC, W, x, appr2Z, "packs/vanilla/highroad_n", 'n')
+					forceHighwayLot(LC, W, x, rampZ,  rp, 'n')
 					rampSide = 1 - rampSide
 				else
 					path = (tick % 4 == 0) and "packs/vanilla/highroad_e_alt"
@@ -377,16 +384,21 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 				path = "packs/vanilla/highroad_canal_n"
 				hwTick = hwTick + 1
 			elseif hwTick > 0 and hwTick % 50 == 0 and not nextSkip then
-				-- off-ramp: T-junction + ramp to E or W
-				-- jnse_tl=N+S+E (W missing); jnsw_tl=N+S+W (E missing)
-				-- hramp2=E=road,W=hw (east exit); hramp4=W=road,E=hw (west exit)
-				local rampX = (rampSide == 0) and (fx + LSZ) or (fx - LSZ)
-				if not inCityRadius(rampX, z, skipCenters) then
+				-- off-ramp: T-junction → 2 approach lots → ramp (3 lots total)
+				local rampDir = rampSide == 0 and 1 or -1
+				local appr1X  = fx + rampDir * LSZ
+				local appr2X  = fx + rampDir * 2 * LSZ
+				local rampX   = fx + rampDir * 3 * LSZ
+				if not inCityRadius(appr1X, z, skipCenters)
+				   and not inCityRadius(appr2X, z, skipCenters)
+				   and not inCityRadius(rampX,  z, skipCenters) then
 					path = (rampSide == 0) and "packs/vanilla/highroad_jnse_tl"
 					                       or  "packs/vanilla/highroad_jnsw_tl"
 					local rp = (rampSide == 0) and "packs/vanilla/hramp2"
 					                           or  "packs/vanilla/hramp4"
-					forceHighwayLot(LC, W, rampX, z, rp, 'n')
+					forceHighwayLot(LC, W, appr1X, z, "packs/vanilla/highroad_e", 'n')
+					forceHighwayLot(LC, W, appr2X, z, "packs/vanilla/highroad_e", 'n')
+					forceHighwayLot(LC, W, rampX,  z, rp, 'n')
 					rampSide = 1 - rampSide
 				else
 					path = (tick % 4 == 0) and "packs/vanilla/highroad_n_alt"
@@ -498,52 +510,53 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 	end
 
 	Net:forceUpdateStartupStatusString("Generating Highways")
-	-- Collect spur junction x positions so backbone skips them (placed separately).
+	-- Pre-compute which N/S directions exist at each spur x so the junction type
+	-- is correct when N and S satellites share the same x column.
 	local juncXSet = {}
-	for _, sat in ipairs(satellites) do
-		if math.abs(sat.z) >= LSZ then juncXSet[sat.x] = true end
-	end
-	buildHighwayEW(LC, Net, W, 0, skipCenters, juncXSet)
+	local juncHasN = {}
+	local juncHasS = {}
 	for _, sat in ipairs(satellites) do
 		if math.abs(sat.z) >= LSZ then
-			-- Junction at the backbone/spur intersection overwrites the backbone piece.
-			-- highroad_jnew_tl = N+E+W (S missing); highroad_jsew_tl = S+E+W (N missing)
-			local juncPath = sat.z > 0
-				and "packs/vanilla/highroad_jnew_tl"
-				or  "packs/vanilla/highroad_jsew_tl"
-			forceHighwayLot(LC, W, sat.x, 0, juncPath, 'n')
-			-- N/S spur from just past z=0 toward satellite, with ramp at satellite edge.
+			juncXSet[sat.x] = true
+			if sat.z > 0 then juncHasN[sat.x] = true
+			else              juncHasS[sat.x] = true end
+		end
+	end
+	buildHighwayEW(LC, Net, W, 0, skipCenters, juncXSet)
+	local placedJunc = {}
+	for _, sat in ipairs(satellites) do
+		if math.abs(sat.z) >= LSZ then
+			if not placedJunc[sat.x] then
+				local juncPath
+				if juncHasN[sat.x] and juncHasS[sat.x] then
+					juncPath = "packs/vanilla/highroad_crosstl"
+				elseif juncHasN[sat.x] then
+					juncPath = "packs/vanilla/highroad_jnew_tl"
+				else
+					juncPath = "packs/vanilla/highroad_jsew_tl"
+				end
+				forceHighwayLot(LC, W, sat.x, 0, juncPath, 'n')
+				placedJunc[sat.x] = true
+			end
 			buildHighwayNS(LC, Net, W, sat.x, sat.z, skipCenters)
 			Net:doKeepAlive()
 		end
 	end
 
-	-- Metro stations at each city edge — two per line, one at the main city
-	-- and one at the satellite. Position found by scanning outward from the city
-	-- center along the metro column until the first lot outside the city radius.
-	-- No corridor lots between stations (all r*sub* connecting lots have road
-	-- surfaces; there are no pure-underground tracks in the metro mod).
+	-- Metro: 1 underground hub station at the main city center + 1 station per
+	-- satellite at its city edge facing inward. All 5 stations form one implied network.
 	Net:forceUpdateStartupStatusString("Generating Metro System")
+	forceHighwayLot(LC, W, 0, 0, "packs/Metros/metrostationred", 'n')
 	for i, sat in ipairs(satellites) do
 		local color = METRO_COLORS[((i - 1) % #METRO_COLORS) + 1]
 		if math.abs(sat.z) >= LSZ then
-			-- N or S satellite: metro column 1 lot east of the highway spur
-			local fx = sat.x + LSZ
-			-- Satellite station: edge facing the main city
-			local satStZ  = scanStationZ(sat.x, sat.z, SAT_CITY_RADIUS,  fx, sat.z < 0)
-			-- Main city station: edge facing the satellite
-			local mainStZ = scanStationZ(0,     0,     MAIN_CITY_RADIUS, fx, sat.z > 0)
-			forceHighwayLot(LC, W, fx, satStZ,  "packs/Metros/metrostation" .. color, 'n')
-			forceHighwayLot(LC, W, fx, mainStZ, "packs/Metros/metrostation" .. color, 'n')
+			local fx     = sat.x + LSZ
+			local satStZ = scanStationZ(sat.x, sat.z, SAT_CITY_RADIUS, fx, sat.z < 0)
+			forceHighwayLot(LC, W, fx, satStZ, "packs/Metros/metrostation" .. color, 'n')
 		else
-			-- E or W satellite: metro row 1 lot north of the backbone
-			local fz = LSZ
-			-- Satellite station: edge facing the main city
-			local satStX  = scanStationX(sat.x, sat.z, SAT_CITY_RADIUS,  fz, sat.x < 0)
-			-- Main city station: edge facing the satellite
-			local mainStX = scanStationX(0,     0,     MAIN_CITY_RADIUS, fz, sat.x > 0)
-			forceHighwayLot(LC, W, satStX,  fz, "packs/Metros/metrostation" .. color, 'n')
-			forceHighwayLot(LC, W, mainStX, fz, "packs/Metros/metrostation" .. color, 'n')
+			local fz     = LSZ
+			local satStX = scanStationX(sat.x, sat.z, SAT_CITY_RADIUS, fz, sat.x < 0)
+			forceHighwayLot(LC, W, satStX, fz, "packs/Metros/metrostation" .. color, 'n')
 		end
 		Net:doKeepAlive()
 	end
