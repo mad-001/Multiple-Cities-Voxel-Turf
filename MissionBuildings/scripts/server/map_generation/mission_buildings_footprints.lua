@@ -288,14 +288,13 @@ end
 
 -- E/W backbone at z=fz.
 -- - City edge ramps: hramp2 (W=hw,E=road) before city; hramp4 (W=road,E=hw) after city.
--- - Alt variant every 4th lot (lit highway).
 -- - Off-ramp exit every 50 highway lots: T-junction + perpendicular ramp.
 -- - juncXSet: x positions of N/S spur junctions (skipped here, placed in caller).
 local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 	local LSZ = turf.Lot.LOT_SIZE
 	local x = LC:getXMin(); x = x - (x % LSZ)
 	local prevSkip = false
-	local tick  = 0   -- every lot position (for alt pattern)
+	local tick  = 0
 	local hwTick = 0  -- actual highway lots placed (for off-ramp spacing)
 	local rampSide = 0  -- 0 = north (+z) exit, 1 = south (-z) exit
 	while x <= LC:getXMax() do
@@ -339,8 +338,7 @@ local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 				end
 				hwTick = hwTick + 1
 			else
-				path = (tick % 4 == 0) and "packs/vanilla/highroad_e_alt"
-				                       or  "packs/vanilla/highroad_e"
+				path = "packs/vanilla/highroad_e"
 				hwTick = hwTick + 1
 			end
 			forceHighwayLot(LC, W, x, fz, path, 'n')
@@ -354,7 +352,7 @@ local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 end
 
 -- N/S spur from z=0 toward satZ. Junction at z=0 placed in caller.
--- Alt variant every 4th lot; off-ramp exit every 50 highway lots.
+-- Off-ramp exit every 50 highway lots.
 --   goingNorth (+z): ramp at city edge is hramp3 (N=road,S=hw); exit ramps go E/W.
 --   goingSouth (-z): ramp at city edge is hramp1 (S=road,N=hw); exit ramps go E/W.
 local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
@@ -406,8 +404,7 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 				end
 				hwTick = hwTick + 1
 			else
-				path = (tick % 4 == 0) and "packs/vanilla/highroad_n_alt"
-				                       or  "packs/vanilla/highroad_n"
+				path = "packs/vanilla/highroad_n"
 				hwTick = hwTick + 1
 			end
 			forceHighwayLot(LC, W, fx, z, path, 'n')
