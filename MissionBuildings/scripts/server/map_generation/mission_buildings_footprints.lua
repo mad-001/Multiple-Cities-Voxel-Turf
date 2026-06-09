@@ -343,7 +343,7 @@ local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 				                       or  "packs/vanilla/highroad_e"
 				hwTick = hwTick + 1
 			end
-			placeHighwayLot(LC, W, x, fz, path, 'n')
+			forceHighwayLot(LC, W, x, fz, path, 'n')
 		elseif skip then
 			hwTick = 0
 		end
@@ -410,7 +410,7 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 				                       or  "packs/vanilla/highroad_n"
 				hwTick = hwTick + 1
 			end
-			placeHighwayLot(LC, W, fx, z, path, 'n')
+			forceHighwayLot(LC, W, fx, z, path, 'n')
 		elseif skip then
 			hwTick = 0
 		end
