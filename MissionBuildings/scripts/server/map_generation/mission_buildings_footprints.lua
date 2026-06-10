@@ -389,7 +389,7 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 			local path
 			if next2Skip and not nextSkip and not prevSkip then
 				-- approach ramp 2 lots before satellite city
-				path = goingNorth and "packs/vanilla/hramp3" or "packs/vanilla/hramp1"
+				path = goingNorth and "packs/vanilla/hramp2" or "packs/vanilla/hramp4"
 				hwTick = 0
 			elseif nextSkip and not prevSkip then
 				-- gap lot immediately before satellite
@@ -401,7 +401,7 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 				hwTick = hwTick + 1
 				exitRampNext = true
 			elseif exitRampNext then
-				path = goingNorth and "packs/vanilla/hramp1" or "packs/vanilla/hramp3"
+				path = goingNorth and "packs/vanilla/hramp4" or "packs/vanilla/hramp2"
 				hwTick = 0
 				exitRampNext = false
 			elseif vt == turf.Lot.LOT_SEA then
