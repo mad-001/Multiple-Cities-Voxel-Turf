@@ -1,0 +1,14 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# VoxelTurf Takaro Connector — TakaroConfig.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+SERVER_NAME=Voxel Turf
+REGISTRATION_TOKEN=CbbLktIhRG6QIPiNNUYvtlZ4OdwOoUhtp9552lbrfMw=
+
+# The default UDP game port for VoxelTurf Dedicated Server is 5728
+GAME_PORT=5728
+
+# Shared secret between Lua mod and bridge — must match on both sides
+EXTERNAL_SECRET=123456
+
+ENABLED=true
