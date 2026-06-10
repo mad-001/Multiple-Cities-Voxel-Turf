@@ -386,21 +386,15 @@ local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
 			local vt = L and L.vtype or turf.Lot.LOT_HILLS
 			local path
 			if next2Skip and not nextSkip and not prevSkip then
-				-- approach ramp 1 lot before satellite: descend into city
-				-- going north → hramp3 (road N=city side, hw S); going south → hramp1 (road S=city side, hw N)
-				path = goingNorth and "packs/vanilla/hramp3" or "packs/vanilla/hramp1"
+				path = goingNorth and "packs/vanilla/hramp2" or "packs/vanilla/hramp4"
 				hwTick = 0
 			elseif nextSkip and not prevSkip then
-				-- gap lot before satellite: leave for city generation
 				hwTick = hwTick + 1
 			elseif prevSkip then
-				-- gap lot after main city: leave for city generation, exit ramp fires next iteration
 				hwTick = hwTick + 1
 				exitRampNext = true
 			elseif exitRampNext then
-				-- exit ramp: ascend from city road level to highway
-				-- going north → hramp1 (road S=city, hw N); going south → hramp3 (road N=city, hw S)
-				path = goingNorth and "packs/vanilla/hramp1" or "packs/vanilla/hramp3"
+				path = goingNorth and "packs/vanilla/hramp4" or "packs/vanilla/hramp2"
 				hwTick = 0
 				exitRampNext = false
 			elseif vt == turf.Lot.LOT_SEA then
@@ -522,12 +516,9 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 	end
 
 	-- Skip list prevents highway lots from overwriting city buildings.
-	-- Inset 96 blocks so highway reaches the visible building edge (cities generate
-	-- buildings inward from their radius; the outer ~96 blocks are typically empty).
-	local HW_SKIP_INSET = 96
-	local skipCenters = {{ x = 0, z = 0, r = MAIN_CITY_RADIUS - HW_SKIP_INSET }}
+	local skipCenters = {{ x = 0, z = 0, r = MAIN_CITY_RADIUS }}
 	for _, sat in ipairs(satellites) do
-		skipCenters[#skipCenters + 1] = { x = sat.x, z = sat.z, r = SAT_CITY_RADIUS - HW_SKIP_INSET }
+		skipCenters[#skipCenters + 1] = { x = sat.x, z = sat.z, r = SAT_CITY_RADIUS }
 	end
 
 	Net:forceUpdateStartupStatusString("Generating Highways")
