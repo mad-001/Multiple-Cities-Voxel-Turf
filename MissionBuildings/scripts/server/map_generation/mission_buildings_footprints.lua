@@ -256,6 +256,40 @@ local function inCityRadius(x, z, centers)
 	return false
 end
 
+-- Returns true for any city development: roads (city grid edge) or buildings.
+-- Excludes plain terrain (VACANT, HILLS, SEA) and already-placed HIGHWAY lots.
+local function isCityLot(LC, x, z)
+	local L = LC:getLotAt(x, z)
+	if not L then return false end
+	local vt = L.vtype
+	return vt ~= turf.Lot.LOT_VACANT
+		and vt ~= turf.Lot.LOT_HILLS
+		and vt ~= turf.Lot.LOT_SEA
+		and vt ~= turf.Lot.LOT_HIGHWAY
+end
+
+local function isRoadLot(LC, x, z)
+	local L = LC:getLotAt(x, z)
+	return L ~= nil and L.vtype == turf.Lot.LOT_ROAD
+end
+
+-- Places a 4-lot highway ramp (hramp*) along x=fx, anchored at anchorZ. hramp is itself
+-- a 4-lot piece, so the 3 following lots must be cleared first or the highway/terrain
+-- would overwrite them and leave only 1 lot of ramp. Placed at the highway level baseY.
+local function place4LotRampNS(LC, fx, anchorZ, piece, baseY)
+	local LSZ = turf.Lot.LOT_SIZE
+	for i = 0, 3 do
+		local zz = anchorZ + i * LSZ
+		local L = LC:getLotAt(fx, zz)
+		if L then
+			local old = L.vtype
+			L:clearData(LC); L.vtype = turf.Lot.LOT_VACANT
+			LC:markUpdate(fx, zz, old, L.vtype)
+		end
+	end
+	LC:loadLot(fx, anchorZ, baseY, piece, 'n', turf.Lot.LOT_FILL_MODE_NORMAL)
+end
+
 local function lotHeight(W, LC, x, z)
 	local LSZ = turf.Lot.LOT_SIZE
 	return getTerrainHeight(W, LC, x + math.floor(LSZ / 2), z + math.floor(LSZ / 2))
@@ -287,71 +321,32 @@ local function forceHighwayLot(LC, W, x, z, lotPath, dir, fixedY)
 	LC:loadLot(x, z, y, lotPath, dir, turf.Lot.LOT_FILL_MODE_NORMAL)
 end
 
--- E/W backbone at z=fz. baseY keeps it flat (doesn't follow terrain).
--- Ramps placed 1 lot away from city edge (gap lot between ramp and city).
--- Off-ramp exits perpendicular every 50 lots. juncXSet positions skipped (caller places them).
-local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
+-- E/W backbone at z=fz. Uses isCityLot to stop exactly at actual city buildings.
+-- baseY keeps it flat. Ramps sit directly adjacent to the city edge (no gap lot).
+-- juncXSet positions skipped by caller.
+local function buildHighwayEW(LC, Net, W, fz, juncXSet)
 	local LSZ = turf.Lot.LOT_SIZE
 	local x = LC:getXMin(); x = x - (x % LSZ)
 	local baseY = lotHeight(W, LC, 0, fz)
 	local prevSkip = false
-	local hwTick = 0
-	local rampSide = 0       -- 0 = north (+z) exit, 1 = south (-z) exit
-	local exitRampNext = false
 	while x <= LC:getXMax() do
-		local skip   = inCityRadius(x, fz, skipCenters)
+		local skip   = isCityLot(LC, x, fz)
 		local isJunc = juncXSet[x]
-		if skip then
-			hwTick = 0
-			exitRampNext = false
-		elseif not isJunc then
-			local nextSkip  = inCityRadius(x + LSZ, fz, skipCenters)
-			local next2Skip = inCityRadius(x + 2*LSZ, fz, skipCenters)
-			local nextJunc  = juncXSet[x + LSZ]
+		if not skip and not isJunc then
+			local nextSkip = isCityLot(LC, x + LSZ, fz)
 			local L  = LC:getLotAt(x, fz)
 			local vt = L and L.vtype or turf.Lot.LOT_HILLS
 			local path
-			if next2Skip and not nextSkip and not prevSkip then
-				-- ramp 1 lot before city edge
-				path = "packs/vanilla/hramp2"
-				hwTick = 0
-			elseif nextSkip and not prevSkip then
-				-- gap lot: leave it for city generation, don't place highway
-				hwTick = hwTick + 1
+			if nextSkip then
+				-- Entering city: ramp sits on the last lot before the city road.
+				if not prevSkip then path = "packs/vanilla/hramp1" end
 			elseif prevSkip then
-				-- gap lot after city: leave it for city generation
-				hwTick = hwTick + 1
-				exitRampNext = true
-			elseif exitRampNext then
-				path = "packs/vanilla/hramp4"
-				hwTick = 0
-				exitRampNext = false
+				-- Leaving city: ramp sits on the first lot after the city road.
+				path = "packs/vanilla/hramp3"
 			elseif vt == turf.Lot.LOT_SEA then
-				path = "packs/vanilla/highroad_canal_e"
-				hwTick = hwTick + 1
-			elseif hwTick > 0 and hwTick % 50 == 0 and not nextSkip and not next2Skip and not nextJunc then
-				local rampDir = rampSide == 0 and 1 or -1
-				local appr1Z  = fz + rampDir * LSZ
-				local appr2Z  = fz + rampDir * 2 * LSZ
-				local rampZ   = fz + rampDir * 3 * LSZ
-				if not inCityRadius(x, appr1Z, skipCenters)
-				   and not inCityRadius(x, appr2Z, skipCenters)
-				   and not inCityRadius(x, rampZ,  skipCenters) then
-					path = (rampSide == 0) and "packs/vanilla/highroad_jnew_tl"
-					                       or  "packs/vanilla/highroad_jsew_tl"
-					local rp = (rampSide == 0) and "packs/vanilla/hramp3"
-					                           or  "packs/vanilla/hramp1"
-					forceHighwayLot(LC, W, x, appr1Z, "packs/vanilla/highroad_e", 'n', baseY)
-					forceHighwayLot(LC, W, x, appr2Z, "packs/vanilla/highroad_e", 'n', baseY)
-					forceHighwayLot(LC, W, x, rampZ,  rp, 'n', baseY)
-					rampSide = 1 - rampSide
-				else
-					path = "packs/vanilla/highroad_e"
-				end
-				hwTick = hwTick + 1
+				path = "packs/vanilla/highroad_canal_n"
 			else
-				path = "packs/vanilla/highroad_e"
-				hwTick = hwTick + 1
+				path = "packs/vanilla/highroad_n"
 			end
 			if path then forceHighwayLot(LC, W, x, fz, path, 'n', baseY) end
 		end
@@ -361,74 +356,86 @@ local function buildHighwayEW(LC, Net, W, fz, skipCenters, juncXSet)
 	end
 end
 
--- N/S spur from z=0 toward satZ. Junction at z=0 placed in caller.
--- Straight sections use highroad_e. Ramps 1 lot away from city edge. baseY keeps it flat.
-local function buildHighwayNS(LC, Net, W, fx, satZ, skipCenters)
+-- N/S spur from z=0 toward satZ. Uses isCityLot to stop at actual city buildings.
+-- Straight sections use highroad_e. Ramps sit directly adjacent to the city edge (no gap lot).
+local function buildHighwayNS(LC, Net, W, fx, satZ)
 	local LSZ = turf.Lot.LOT_SIZE
 	local goingNorth = satZ > 0
 	local zStep = goingNorth and LSZ or -LSZ
 	local z = zStep
 	local baseY = lotHeight(W, LC, fx, 0)
 	local prevSkip = false
-	local hwTick = 0
-	local rampSide = 0       -- 0 = east (+x) exit, 1 = west (-x) exit
-	local exitRampNext = false
 	local function pastEnd(cur) return goingNorth and (cur > satZ) or (cur < satZ) end
 	while not pastEnd(z) do
-		local skip = inCityRadius(fx, z, skipCenters)
-		if skip then
-			hwTick = 0
-			exitRampNext = false
-		else
-			local nextSkip  = inCityRadius(fx, z + zStep, skipCenters)
-			local next2Skip = inCityRadius(fx, z + 2*zStep, skipCenters)
+		local skip = isCityLot(LC, fx, z)
+		if not skip then
+			local nextSkip = isCityLot(LC, fx, z + zStep)
 			local L  = LC:getLotAt(fx, z)
 			local vt = L and L.vtype or turf.Lot.LOT_HILLS
 			local path
-			if next2Skip and not nextSkip and not prevSkip then
-				path = goingNorth and "packs/vanilla/hramp2" or "packs/vanilla/hramp4"
-				hwTick = 0
-			elseif nextSkip and not prevSkip then
-				hwTick = hwTick + 1
+			if nextSkip then
+				if not prevSkip then path = goingNorth and "packs/vanilla/hramp2" or "packs/vanilla/hramp4" end
 			elseif prevSkip then
-				hwTick = hwTick + 1
-				exitRampNext = true
-			elseif exitRampNext then
 				path = goingNorth and "packs/vanilla/hramp4" or "packs/vanilla/hramp2"
-				hwTick = 0
-				exitRampNext = false
 			elseif vt == turf.Lot.LOT_SEA then
 				path = "packs/vanilla/highroad_canal_e"
-				hwTick = hwTick + 1
-			elseif hwTick > 0 and hwTick % 50 == 0 and not nextSkip and not next2Skip then
-				-- off-ramp exits east (+x) or west (-x)
-				local rampDir = rampSide == 0 and 1 or -1
-				local appr1X  = fx + rampDir * LSZ
-				local appr2X  = fx + rampDir * 2 * LSZ
-				local rampX   = fx + rampDir * 3 * LSZ
-				if not inCityRadius(appr1X, z, skipCenters)
-				   and not inCityRadius(appr2X, z, skipCenters)
-				   and not inCityRadius(rampX,  z, skipCenters) then
-					path = (rampSide == 0) and "packs/vanilla/highroad_jnse_tl"
-					                       or  "packs/vanilla/highroad_jnsw_tl"
-					local rp = (rampSide == 0) and "packs/vanilla/hramp2"
-					                           or  "packs/vanilla/hramp4"
-					forceHighwayLot(LC, W, appr1X, z, "packs/vanilla/highroad_e", 'n', baseY)
-					forceHighwayLot(LC, W, appr2X, z, "packs/vanilla/highroad_e", 'n', baseY)
-					forceHighwayLot(LC, W, rampX,  z, rp, 'n', baseY)
-					rampSide = 1 - rampSide
-				else
-					path = "packs/vanilla/highroad_e"
-				end
-				hwTick = hwTick + 1
 			else
 				path = "packs/vanilla/highroad_e"
-				hwTick = hwTick + 1
 			end
 			if path then forceHighwayLot(LC, W, fx, z, path, 'n', baseY) end
 		end
 		prevSkip = skip
 		z = z + zStep
+		if z % (64 * LSZ) == 0 then Net:doKeepAlive() end
+	end
+end
+
+-- Single highway: center city (0,0) -> north satellite at (0,satZ).
+-- Reads every road along the x=0 column from origin to the satellite, then splits at
+-- the LARGEST gap between roads (that gap is the wilderness between the two cities).
+-- The roads on either side of it are the center city's north edge and the north city's
+-- south edge. Lays flat highway between them, leaving a 4-lot gap at each for the ramps.
+local function buildNorthHighway(LC, Net, W, satZ)
+	local LSZ = turf.Lot.LOT_SIZE
+	local fx = 0
+	local baseY = lotHeight(W, LC, fx, 0)
+
+	-- 1) Collect every road z along x=0 from just north of origin up to the satellite.
+	local roads = {}
+	local z = 0
+	while z < satZ do
+		z = z + LSZ
+		if isRoadLot(LC, fx, z) then roads[#roads + 1] = z end
+		if z % (64 * LSZ) == 0 then Net:doKeepAlive() end
+	end
+	if #roads < 2 then return end
+
+	-- 2) Largest gap between consecutive roads = wilderness between the two cities.
+	local bestGap, splitIdx = -1, nil
+	for i = 2, #roads do
+		local d = roads[i] - roads[i - 1]
+		if d > bestGap then bestGap = d; splitIdx = i end
+	end
+	local cNorthEdge = roads[splitIdx - 1]   -- center city's north road edge
+	local nSouthEdge = roads[splitIdx]       -- north city's south road edge
+
+	-- 3) A 4-lot hramp ramp at each city edge, then flat highway between:
+	--    city road -> hramp (4 lots) -> highway -> hramp (4 lots) -> city road.
+	-- Highway and ramps share one flat level, baseY - 1, so they line up.
+	local hwY = baseY - 1
+	place4LotRampNS(LC, fx, cNorthEdge + LSZ,     "packs/vanilla/hramp4", hwY)
+	place4LotRampNS(LC, fx, nSouthEdge - 4 * LSZ, "packs/vanilla/hramp2", hwY)
+
+	local zStart = cNorthEdge + 5 * LSZ
+	local zEnd   = nSouthEdge - 5 * LSZ
+	z = zStart
+	while z <= zEnd do
+		local L  = LC:getLotAt(fx, z)
+		local vt = L and L.vtype or turf.Lot.LOT_HILLS
+		local path = (vt == turf.Lot.LOT_SEA) and "packs/vanilla/highroad_canal_e"
+		                                       or  "packs/vanilla/highroad_e"
+		forceHighwayLot(LC, W, fx, z, path, 'n', hwY)
+		z = z + LSZ
 		if z % (64 * LSZ) == 0 then Net:doKeepAlive() end
 	end
 end
@@ -515,46 +522,6 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 		::next_satellite::
 	end
 
-	-- Skip list prevents highway lots from overwriting city buildings.
-	local skipCenters = {{ x = 0, z = 0, r = MAIN_CITY_RADIUS }}
-	for _, sat in ipairs(satellites) do
-		skipCenters[#skipCenters + 1] = { x = sat.x, z = sat.z, r = SAT_CITY_RADIUS }
-	end
-
-	Net:forceUpdateStartupStatusString("Generating Highways")
-	-- Pre-compute which N/S directions exist at each spur x so the junction type
-	-- is correct when N and S satellites share the same x column.
-	local juncXSet = {}
-	local juncHasN = {}
-	local juncHasS = {}
-	for _, sat in ipairs(satellites) do
-		if math.abs(sat.z) >= LSZ then
-			juncXSet[sat.x] = true
-			if sat.z > 0 then juncHasN[sat.x] = true
-			else              juncHasS[sat.x] = true end
-		end
-	end
-	buildHighwayEW(LC, Net, W, 0, skipCenters, juncXSet)
-	local placedJunc = {}
-	for _, sat in ipairs(satellites) do
-		if math.abs(sat.z) >= LSZ then
-			if not placedJunc[sat.x] then
-				local juncPath
-				if juncHasN[sat.x] and juncHasS[sat.x] then
-					juncPath = "packs/vanilla/highroad_crosstl"
-				elseif juncHasN[sat.x] then
-					juncPath = "packs/vanilla/highroad_jnew_tl"
-				else
-					juncPath = "packs/vanilla/highroad_jsew_tl"
-				end
-				forceHighwayLot(LC, W, sat.x, 0, juncPath, 'n')
-				placedJunc[sat.x] = true
-			end
-			buildHighwayNS(LC, Net, W, sat.x, sat.z, skipCenters)
-			Net:doKeepAlive()
-		end
-	end
-
 	-- Metro: 1 underground hub station at the main city center + 1 station per
 	-- satellite at its city edge facing inward. All 5 stations form one implied network.
 	Net:forceUpdateStartupStatusString("Generating Metro System")
@@ -573,12 +540,22 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 		Net:doKeepAlive()
 	end
 
-	-- Terrain conforming runs last so a crash here won't kill cities or highways.
+	-- Terrain conforming runs before highways so it can't flatten the highway ramps.
 	Net:forceUpdateStartupStatusString("Conforming Roads To Terrain")
 	conformRoadsToTerrain(W, LC, Net, 0, 0, MAIN_CITY_RADIUS)
 	for _, sat in ipairs(satellites) do
 		conformRoadsToTerrain(W, LC, Net, sat.x, sat.z, SAT_CITY_RADIUS)
 		Net:doKeepAlive()
+	end
+
+	-- Highways run LAST so the terrain-conform pass can't wipe the ramps.
+	-- Focus: perfect the center city -> north satellite highway only, for now.
+	Net:forceUpdateStartupStatusString("Generating Highways")
+	for _, sat in ipairs(satellites) do
+		if sat.x == 0 and sat.z > 0 then
+			buildNorthHighway(LC, Net, W, sat.z)
+			Net:doKeepAlive()
+		end
 	end
 
 	W:genLotCache()
