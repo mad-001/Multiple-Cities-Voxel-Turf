@@ -288,6 +288,20 @@ local function place4LotRampNS(LC, fx, anchorZ, piece, baseY)
 		end
 	end
 	LC:loadLot(fx, anchorZ, baseY, piece, 'n', turf.Lot.LOT_FILL_MODE_NORMAL)
+	-- Road data so AI cars use the ramp: low connection on the city side, high on the
+	-- highway side. hramp2 = road E / highway W, hramp4 = road W / highway E.
+	local lE, lW, hE, hW = false, false, false, false
+	if piece == "packs/vanilla/hramp2" then lE, hW = true, true
+	elseif piece == "packs/vanilla/hramp4" then lW, hE = true, true end
+	for i = 0, 3 do
+		local L = LC:getLotAt(fx, anchorZ + i * LSZ)
+		if L then
+			local LRD = turf.LotRoadData.genNew()
+			LRD:set2(false, false, lE, lW, false, false, hE, hW)
+			L.vtype = turf.Lot.LOT_ROAD
+			L.lotData = LRD
+		end
+	end
 end
 
 local function lotHeight(W, LC, x, z)
@@ -424,22 +438,24 @@ local function buildHighwayNS(LC, Net, W, fx, satZ)
 	end
 end
 
--- Single highway: center city (0,0) -> east satellite at (0,satZ). The highway runs
--- along +z, which in VoxelTurf's frame is EAST (z = east/west, x = north/south).
+-- Single highway along the z-axis (east/west): center city (0,0) -> satellite at
+-- (0,satZ). satZ > 0 = east (+z), satZ < 0 = west (-z). z = east/west, x = north/south.
 -- Reads every road along the x=0 column from origin to the satellite, then splits at
 -- the LARGEST gap between roads (the wilderness between the two cities). The roads on
--- either side are the center city's east edge and the east city's west edge. Lays a
--- flat highway between them, leaving a 4-lot gap at each end for the ramps.
-local function buildEastHighway(LC, Net, W, satZ)
+-- either side are each city's facing edge. Lays a flat highway between them, leaving a
+-- 4-lot gap at each end for the ramps.
+local function buildHighwayZ(LC, Net, W, satZ)
 	local LSZ = turf.Lot.LOT_SIZE
 	local fx = 0
 	local baseY = lotHeight(W, LC, fx, 0)
+	local toward = satZ > 0            -- true = east (+z), false = west (-z)
+	local step = toward and LSZ or -LSZ
 
-	-- 1) Collect every road z along x=0 from just east of origin up to the satellite.
+	-- 1) Collect every road z along x=0 from just past origin out to the satellite.
 	local roads = {}
 	local z = 0
-	while z < satZ do
-		z = z + LSZ
+	while (toward and z < satZ) or (not toward and z > satZ) do
+		z = z + step
 		if isRoadLot(LC, fx, z) then roads[#roads + 1] = z end
 		if z % (64 * LSZ) == 0 then Net:doKeepAlive() end
 	end
@@ -448,28 +464,33 @@ local function buildEastHighway(LC, Net, W, satZ)
 	-- 2) Largest gap between consecutive roads = wilderness between the two cities.
 	local bestGap, splitIdx = -1, nil
 	for i = 2, #roads do
-		local d = roads[i] - roads[i - 1]
+		local d = math.abs(roads[i] - roads[i - 1])
 		if d > bestGap then bestGap = d; splitIdx = i end
 	end
-	local centerEdge = roads[splitIdx - 1]   -- center city's east road edge
-	local satEdge    = roads[splitIdx]       -- east city's west road edge
+	local centerEdge = roads[splitIdx - 1]   -- center city's facing road edge
+	local satEdge    = roads[splitIdx]       -- satellite city's facing road edge
 
 	-- 3) A 4-lot hramp ramp at each city edge, then flat highway between:
 	--    city road -> hramp (4 lots) -> highway -> hramp (4 lots) -> city road.
 	-- Highway and ramps share one flat level, baseY - 1, so they line up.
+	-- The ramp/highway leaves each city toward the wilderness gap: the center city on
+	-- the satZ side, the satellite city on the opposite side. Pieces/junction sides
+	-- mirror between east and west.
 	local hwY = baseY - 1
-	place4LotRampNS(LC, fx, centerEdge + LSZ,  "packs/vanilla/hramp4", hwY)
-	place4LotRampNS(LC, fx, satEdge - 4 * LSZ, "packs/vanilla/hramp2", hwY)
+	if toward then
+		place4LotRampNS(LC, fx, centerEdge + LSZ,  "packs/vanilla/hramp4", hwY)
+		place4LotRampNS(LC, fx, satEdge - 4 * LSZ, "packs/vanilla/hramp2", hwY)
+		placeRampJunction(LC, W, fx, centerEdge, 'e')  -- ramp joins center from east
+		placeRampJunction(LC, W, fx, satEdge, 'w')     -- ramp joins satellite from west
+	else
+		place4LotRampNS(LC, fx, centerEdge - 4 * LSZ, "packs/vanilla/hramp2", hwY)
+		place4LotRampNS(LC, fx, satEdge + LSZ,        "packs/vanilla/hramp4", hwY)
+		placeRampJunction(LC, W, fx, centerEdge, 'w')  -- ramp joins center from west
+		placeRampJunction(LC, W, fx, satEdge, 'e')     -- ramp joins satellite from east
+	end
 
-	-- Replace the plain sidewalk edge road each ramp lands on with a traffic-light
-	-- junction matching the road's real connections (handles the case where the city
-	-- edge road turned). The ramp joins the center city from the east (+z), and the
-	-- east city from the west (-z).
-	placeRampJunction(LC, W, fx, centerEdge, 'e')
-	placeRampJunction(LC, W, fx, satEdge, 'w')
-
-	local zStart = centerEdge + 5 * LSZ
-	local zEnd   = satEdge - 5 * LSZ
+	local zStart = math.min(centerEdge, satEdge) + 5 * LSZ
+	local zEnd   = math.max(centerEdge, satEdge) - 5 * LSZ
 	local idx = 0
 	z = zStart
 	while z <= zEnd do
@@ -486,6 +507,14 @@ local function buildEastHighway(LC, Net, W, satZ)
 			path = "packs/vanilla/highroad_e_alt"
 		end
 		forceHighwayLot(LC, W, fx, z, path, 'n', hwY)
+		-- Road data so AI cars drive the elevated highway (high E/W traffic).
+		local hL = LC:getLotAt(fx, z)
+		if hL then
+			local LRD = turf.LotRoadData.genNew()
+			LRD:setHighPerservingLow(false, false, true, true)
+			hL.vtype = turf.Lot.LOT_ROAD
+			hL.lotData = LRD
+		end
 		idx = idx + 1
 		z = z + LSZ
 		if z % (64 * LSZ) == 0 then Net:doKeepAlive() end
@@ -565,8 +594,11 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 		if maxDist < minDist then goto next_satellite end
 
 		local dist = math.min(maxDist, targetDist)
-		local sx = math.floor(cosA * dist / LSZ) * LSZ
-		local sz = math.floor(sinA * dist / LSZ) * LSZ
+		-- Snap the near-zero (perpendicular) axis to exactly 0 so axis-aligned cities
+		-- land on x=0 / z=0. (floor() otherwise lands the west/south city on -16 because
+		-- cos/sin of 270deg is a tiny negative float, leaving it 1 lot off-axis.)
+		local sx = (math.abs(cosA) < 0.01) and 0 or (math.floor(cosA * dist / LSZ) * LSZ)
+		local sz = (math.abs(sinA) < 0.01) and 0 or (math.floor(sinA * dist / LSZ) * LSZ)
 		table.insert(satellites, { x = sx, z = sz })
 		_orig_generate_city(W, LC, SAT_CITY_RADIUS, sx, sz, 0)
 		Net:doKeepAlive()
@@ -601,12 +633,14 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 	end
 
 	-- Highways run LAST so the terrain-conform pass can't wipe the ramps.
-	-- Focus: perfect the center city -> east satellite highway only, for now.
-	-- (+z is east in VoxelTurf: z = east/west, x = north/south.)
+	-- East (+z) and West (-z) highways along the z-axis, one satellite at a time.
+	-- (z = east/west, x = north/south.) N/S along x still to come.
 	Net:forceUpdateStartupStatusString("Generating Highways")
 	for _, sat in ipairs(satellites) do
-		if sat.x == 0 and sat.z > 0 then
-			buildEastHighway(LC, Net, W, sat.z)
+		-- z-axis (east/west) satellites: x ~= 0 (floor() can land on -16 for the west
+		-- one due to cos(270deg) being a tiny negative float), z large.
+		if math.abs(sat.x) <= LSZ and math.abs(sat.z) >= 2 * LSZ then
+			buildHighwayZ(LC, Net, W, sat.z)
 			Net:doKeepAlive()
 		end
 	end
