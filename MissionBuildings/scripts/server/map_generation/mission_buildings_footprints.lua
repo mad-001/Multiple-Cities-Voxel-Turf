@@ -304,6 +304,34 @@ local function place4LotRampNS(LC, fx, anchorZ, piece, baseY)
 	end
 end
 
+-- x-axis (north/south) mirror of place4LotRampNS: the 4 ramp lots lay out along x at
+-- fixed z=fz. hramp1 = road S / highway N, hramp3 = road N / highway S.
+local function place4LotRampX(LC, fz, anchorX, piece, baseY)
+	local LSZ = turf.Lot.LOT_SIZE
+	for i = 0, 3 do
+		local xx = anchorX + i * LSZ
+		local L = LC:getLotAt(xx, fz)
+		if L then
+			local old = L.vtype
+			L:clearData(LC); L.vtype = turf.Lot.LOT_VACANT
+			LC:markUpdate(xx, fz, old, L.vtype)
+		end
+	end
+	LC:loadLot(anchorX, fz, baseY, piece, 'n', turf.Lot.LOT_FILL_MODE_NORMAL)
+	local lN, lS, hN, hS = false, false, false, false
+	if piece == "packs/vanilla/hramp1" then lS, hN = true, true
+	elseif piece == "packs/vanilla/hramp3" then lN, hS = true, true end
+	for i = 0, 3 do
+		local L = LC:getLotAt(anchorX + i * LSZ, fz)
+		if L then
+			local LRD = turf.LotRoadData.genNew()
+			LRD:set2(lN, lS, false, false, hN, hS, false, false)
+			L.vtype = turf.Lot.LOT_ROAD
+			L.lotData = LRD
+		end
+	end
+end
+
 local function lotHeight(W, LC, x, z)
 	local LSZ = turf.Lot.LOT_SIZE
 	return getTerrainHeight(W, LC, x + math.floor(LSZ / 2), z + math.floor(LSZ / 2))
@@ -341,23 +369,27 @@ end
 -- south, so N/S = +/-x and E/W = +/-z. rampFrom is the side the ramp joins from ('e'/'w').
 local function placeRampJunction(LC, W, fx, z, rampFrom)
 	local LSZ = turf.Lot.LOT_SIZE
-	local n = isRoadLot(LC, fx + LSZ, z)                       -- +x = north
-	local s = isRoadLot(LC, fx - LSZ, z)                       -- -x = south
+	local n = (rampFrom == 'n') or isRoadLot(LC, fx + LSZ, z)  -- +x = north
+	local s = (rampFrom == 's') or isRoadLot(LC, fx - LSZ, z)  -- -x = south
 	local e = (rampFrom == 'e') or isRoadLot(LC, fx, z + LSZ)  -- +z = east
 	local w = (rampFrom == 'w') or isRoadLot(LC, fx, z - LSZ)  -- -z = west
 	local cnt = (n and 1 or 0) + (s and 1 or 0) + (e and 1 or 0) + (w and 1 or 0)
+	-- The ramp base must ALWAYS be a traffic-light T. If the edge road is degenerate
+	-- (a corner, or collinear with the ramp, giving <3 connections), force the through-
+	-- road perpendicular to the ramp so a proper TL junction is chosen instead of a curve.
+	if cnt < 3 then
+		if rampFrom == 'n' or rampFrom == 's' then e = true; w = true
+		else n = true; s = true end
+		cnt = (n and 1 or 0) + (s and 1 or 0) + (e and 1 or 0) + (w and 1 or 0)
+	end
 	local piece, dir = nil, 'n'
 	if cnt >= 4 then
 		piece = "packs/vanilla/road_crosstl"        -- N,S,E,W + TL
-	elseif cnt == 3 then
+	else                                            -- cnt == 3
 		if not w then piece = "packs/vanilla/road_jnse_tl"      -- N,S,E
 		elseif not e then piece = "packs/vanilla/road_jnsw_tl"  -- N,S,W
 		elseif not s then piece = "packs/vanilla/road_jnew_tl"  -- N,E,W
 		else piece = "packs/vanilla/road_jsew_tl" end           -- S,E,W
-	else
-		-- 2 or fewer connections: no TL variant, fall back to a plain through-road.
-		local p; p, dir = roadPiece(n, s, e, w, fx, z, LSZ)
-		piece = "road/rf/" .. p
 	end
 	forceHighwayLot(LC, W, fx, z, piece, dir, lotHeight(W, LC, fx, z))
 	local L = LC:getLotAt(fx, z)
@@ -499,14 +531,18 @@ local function buildHighwayZ(LC, Net, W, satZ)
 		-- Alternate the lamp variant every other lot (all kept at dir 'n' so the road
 		-- stays aligned). Sea spans use the canal bridge piece.
 		local path
+		local y = hwY
 		if vt == turf.Lot.LOT_SEA then
+			-- Canal bridge piece has a built-in -3 yoffset (roads.csv); loadLot doesn't
+			-- auto-apply it, so drop it 3 or the bridge deck sits 3 too tall.
 			path = "packs/vanilla/highroad_canal_e"
+			y = hwY - 3
 		elseif idx % 2 == 0 then
 			path = "packs/vanilla/highroad_e"
 		else
 			path = "packs/vanilla/highroad_e_alt"
 		end
-		forceHighwayLot(LC, W, fx, z, path, 'n', hwY)
+		forceHighwayLot(LC, W, fx, z, path, 'n', y)
 		-- Road data so AI cars drive the elevated highway (high E/W traffic).
 		local hL = LC:getLotAt(fx, z)
 		if hL then
@@ -518,6 +554,86 @@ local function buildHighwayZ(LC, Net, W, satZ)
 		idx = idx + 1
 		z = z + LSZ
 		if z % (64 * LSZ) == 0 then Net:doKeepAlive() end
+	end
+end
+
+-- Single highway along the x-axis (north/south): center city (0,0) -> satellite at
+-- (satX,0). satX > 0 = north (+x), satX < 0 = south (-x). x = north/south, z = east/west.
+-- Exact mirror of buildHighwayZ: scans every road along the z=0 row from origin out to
+-- the satellite, splits at the LARGEST gap (wilderness between the two cities), lays a
+-- flat highway between the facing edges with a 4-lot hramp at each end.
+local function buildHighwayX(LC, Net, W, satX)
+	local LSZ = turf.Lot.LOT_SIZE
+	local fz = 0
+	local baseY = lotHeight(W, LC, 0, fz)
+	local toward = satX > 0            -- true = north (+x), false = south (-x)
+	local step = toward and LSZ or -LSZ
+
+	-- 1) Collect every road x along z=0 from just past origin out to the satellite.
+	local roads = {}
+	local x = 0
+	while (toward and x < satX) or (not toward and x > satX) do
+		x = x + step
+		if isRoadLot(LC, x, fz) then roads[#roads + 1] = x end
+		if x % (64 * LSZ) == 0 then Net:doKeepAlive() end
+	end
+	if #roads < 2 then return end
+
+	-- 2) Largest gap between consecutive roads = wilderness between the two cities.
+	local bestGap, splitIdx = -1, nil
+	for i = 2, #roads do
+		local d = math.abs(roads[i] - roads[i - 1])
+		if d > bestGap then bestGap = d; splitIdx = i end
+	end
+	local centerEdge = roads[splitIdx - 1]   -- center city's facing road edge
+	local satEdge    = roads[splitIdx]       -- satellite city's facing road edge
+
+	-- 3) A 4-lot hramp at each city edge, flat highway between. hramp1 = road S/highway N,
+	--    hramp3 = road N/highway S. Pieces/junction sides mirror between north and south.
+	local hwY = baseY - 1
+	if toward then
+		place4LotRampX(LC, fz, centerEdge + LSZ,  "packs/vanilla/hramp1", hwY)
+		place4LotRampX(LC, fz, satEdge - 4 * LSZ, "packs/vanilla/hramp3", hwY)
+		placeRampJunction(LC, W, centerEdge, fz, 'n')  -- ramp joins center from north
+		placeRampJunction(LC, W, satEdge, fz, 's')     -- ramp joins satellite from south
+	else
+		place4LotRampX(LC, fz, centerEdge - 4 * LSZ, "packs/vanilla/hramp3", hwY)
+		place4LotRampX(LC, fz, satEdge + LSZ,        "packs/vanilla/hramp1", hwY)
+		placeRampJunction(LC, W, centerEdge, fz, 's')  -- ramp joins center from south
+		placeRampJunction(LC, W, satEdge, fz, 'n')     -- ramp joins satellite from north
+	end
+
+	local xStart = math.min(centerEdge, satEdge) + 5 * LSZ
+	local xEnd   = math.max(centerEdge, satEdge) - 5 * LSZ
+	local idx = 0
+	x = xStart
+	while x <= xEnd do
+		local L  = LC:getLotAt(x, fz)
+		local vt = L and L.vtype or turf.Lot.LOT_HILLS
+		local path
+		local y = hwY
+		if vt == turf.Lot.LOT_SEA then
+			-- Canal bridge piece has a built-in -3 yoffset (roads.csv); loadLot doesn't
+			-- auto-apply it, so drop it 3 or the bridge deck sits 3 too tall.
+			path = "packs/vanilla/highroad_canal_n"
+			y = hwY - 3
+		elseif idx % 2 == 0 then
+			path = "packs/vanilla/highroad_n"
+		else
+			path = "packs/vanilla/highroad_n_alt"
+		end
+		forceHighwayLot(LC, W, x, fz, path, 'n', y)
+		-- Road data so AI cars drive the elevated highway (high N/S traffic).
+		local hL = LC:getLotAt(x, fz)
+		if hL then
+			local LRD = turf.LotRoadData.genNew()
+			LRD:setHighPerservingLow(true, true, false, false)
+			hL.vtype = turf.Lot.LOT_ROAD
+			hL.lotData = LRD
+		end
+		idx = idx + 1
+		x = x + LSZ
+		if x % (64 * LSZ) == 0 then Net:doKeepAlive() end
 	end
 end
 
@@ -641,6 +757,11 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 		-- one due to cos(270deg) being a tiny negative float), z large.
 		if math.abs(sat.x) <= LSZ and math.abs(sat.z) >= 2 * LSZ then
 			buildHighwayZ(LC, Net, W, sat.z)
+			Net:doKeepAlive()
+		end
+		-- x-axis (north/south) satellites: z ~= 0, x large.
+		if math.abs(sat.z) <= LSZ and math.abs(sat.x) >= 2 * LSZ then
+			buildHighwayX(LC, Net, W, sat.x)
 			Net:doKeepAlive()
 		end
 	end
