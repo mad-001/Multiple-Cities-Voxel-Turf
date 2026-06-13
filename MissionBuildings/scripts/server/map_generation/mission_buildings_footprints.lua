@@ -673,26 +673,29 @@ local function scanStationX(cx, cz, cityRadius, metroZ, goEast)
 end
 
 
--- ─── Part 8: OnMapGen_extra ───────────────────────────────────────────────────
-customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
+-- ─── Part 8: city generation ─────────────────────────────────────────────────
+-- Satellites are generated in the OnMapGen PRE-hook (before standard generation) so the
+-- engine's economy/ownership init — which runs as part of standard generation — includes
+-- them. Built in OnMapGen_extra instead (as before), their buildings were economically dead:
+-- 0 income, could not be owned or racketeered. Roads/metro/highways stay in _extra below;
+-- they only touch road lots, so highway behaviour is unchanged.
+local _mb_satellites = {}
+
+customFunc.OnMapGen = function(GMS, W, LC, nFactions, nBasesPerFaction)
 	local Net = turf.NetworkHandler.getInstance()
 	local LSZ  = turf.Lot.LOT_SIZE
 	local xMax = LC:getXMax()
 	local zMax = LC:getZMax()
+	_mb_satellites = {}
 
-	-- Always try all 4 NSEW directions; the minDist check below filters any that
-	-- don't fit on this particular map. Bail early only if even one satellite can't
-	-- possibly be at least minDist from the main city.
+	-- Bail (centre city only) if the map can't fit a satellite at least minDist away.
+	if math.min(xMax, zMax) < MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 100 then return end
+
 	local nSat = 4
-	if math.min(xMax, zMax) < MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 100 then
-		W:genLotCache(); return
-	end
-
 	local targetDist = MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 800  -- 1800 blocks
 	local minDist    = MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 100  -- 1100 blocks
 
 	-- Satellites at cardinal directions (z=E/W, x=N/S): N(0°,+x), E(90°,+z), S(180°,-x), W(270°,-z).
-	local satellites = {}
 	Net:forceUpdateStartupStatusString("Generating Satellite Cities")
 	for i = 0, nSat - 1 do
 		local angle = i * (math.pi / 2)
@@ -707,20 +710,26 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 			or  math.huge
 		local maxDist = math.min(maxDistX, maxDistZ)
 
-		if maxDist < minDist then goto next_satellite end
-
-		local dist = math.min(maxDist, targetDist)
-		-- Snap the near-zero (perpendicular) axis to exactly 0 so axis-aligned cities
-		-- land on x=0 / z=0. (floor() otherwise lands the west/south city on -16 because
-		-- cos/sin of 270deg is a tiny negative float, leaving it 1 lot off-axis.)
-		local sx = (math.abs(cosA) < 0.01) and 0 or (math.floor(cosA * dist / LSZ) * LSZ)
-		local sz = (math.abs(sinA) < 0.01) and 0 or (math.floor(sinA * dist / LSZ) * LSZ)
-		table.insert(satellites, { x = sx, z = sz })
-		_orig_generate_city(W, LC, SAT_CITY_RADIUS, sx, sz, 0)
-		Net:doKeepAlive()
-
-		::next_satellite::
+		if maxDist >= minDist then
+			local dist = math.min(maxDist, targetDist)
+			-- Snap the near-zero (perpendicular) axis to exactly 0 so axis-aligned cities
+			-- land on x=0 / z=0. (floor() otherwise lands the west/south city on -16 because
+			-- cos/sin of 270deg is a tiny negative float, leaving it 1 lot off-axis.)
+			local sx = (math.abs(cosA) < 0.01) and 0 or (math.floor(cosA * dist / LSZ) * LSZ)
+			local sz = (math.abs(sinA) < 0.01) and 0 or (math.floor(sinA * dist / LSZ) * LSZ)
+			table.insert(_mb_satellites, { x = sx, z = sz })
+			_orig_generate_city(W, LC, SAT_CITY_RADIUS, sx, sz, 0)
+			Net:doKeepAlive()
+		end
 	end
+	-- return nil -> standard generation runs next and economically initializes the satellites.
+end
+
+-- ─── Part 8b: OnMapGen_extra — roads/metro/highways over the already-built cities ──
+customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
+	local Net = turf.NetworkHandler.getInstance()
+	local LSZ  = turf.Lot.LOT_SIZE
+	local satellites = _mb_satellites
 
 	-- Metro: 1 underground hub station at the main city center + 1 station per
 	-- satellite at its city edge facing inward. All 5 stations form one implied network.
