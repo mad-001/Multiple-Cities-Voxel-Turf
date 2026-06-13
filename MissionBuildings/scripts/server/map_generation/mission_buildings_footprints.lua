@@ -508,7 +508,7 @@ local function buildHighwayZ(LC, Net, W, satZ)
 	-- The ramp/highway leaves each city toward the wilderness gap: the center city on
 	-- the satZ side, the satellite city on the opposite side. Pieces/junction sides
 	-- mirror between east and west.
-	local hwY = baseY - 1
+	local hwY = baseY   -- highway+ramp deck level (was baseY-1, which sank it 1 block)
 	if toward then
 		place4LotRampNS(LC, fx, centerEdge + LSZ,  "packs/vanilla/hramp4", hwY)
 		place4LotRampNS(LC, fx, satEdge - 4 * LSZ, "packs/vanilla/hramp2", hwY)
@@ -590,7 +590,7 @@ local function buildHighwayX(LC, Net, W, satX)
 
 	-- 3) A 4-lot hramp at each city edge, flat highway between. hramp1 = road S/highway N,
 	--    hramp3 = road N/highway S. Pieces/junction sides mirror between north and south.
-	local hwY = baseY - 1
+	local hwY = baseY   -- highway+ramp deck level (was baseY-1, which sank it 1 block)
 	if toward then
 		place4LotRampX(LC, fz, centerEdge + LSZ,  "packs/vanilla/hramp1", hwY)
 		place4LotRampX(LC, fz, satEdge - 4 * LSZ, "packs/vanilla/hramp3", hwY)
