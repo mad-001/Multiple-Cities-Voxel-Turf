@@ -673,6 +673,89 @@ local function scanStationX(cx, cz, cityRadius, metroZ, goEast)
 end
 
 
+-- ─── Part 7b: per-player spawn helpers ───────────────────────────────────────
+-- Deterministic satellite centers (matches the OnMapGen pre-hook math; also works after a
+-- restart, where the pre-hook didn't run this session, so spawns can still be located).
+local function computeSatelliteCenters(W, LC)
+	local LSZ  = turf.Lot.LOT_SIZE
+	local xMax = LC:getXMax()
+	local zMax = LC:getZMax()
+	local out = {}
+	if math.min(xMax, zMax) < MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 100 then return out end
+	local targetDist = MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 800
+	local minDist    = MAIN_CITY_RADIUS + SAT_CITY_RADIUS + 100
+	for i = 0, 3 do
+		local angle = i * (math.pi / 2)
+		local cosA, sinA = math.cos(angle), math.sin(angle)
+		local maxDistX = math.abs(cosA) > 0.01 and (xMax - SAT_CITY_RADIUS - LSZ) / math.abs(cosA) or math.huge
+		local maxDistZ = math.abs(sinA) > 0.01 and (zMax - SAT_CITY_RADIUS - LSZ) / math.abs(sinA) or math.huge
+		local maxDist = math.min(maxDistX, maxDistZ)
+		if maxDist >= minDist then
+			local dist = math.min(maxDist, targetDist)
+			local sx = (math.abs(cosA) < 0.01) and 0 or (math.floor(cosA * dist / LSZ) * LSZ)
+			local sz = (math.abs(sinA) < 0.01) and 0 or (math.floor(sinA * dist / LSZ) * LSZ)
+			out[#out + 1] = { x = sx, z = sz }
+		end
+	end
+	return out
+end
+
+local CITY_SPAWNS = nil
+
+-- Find the LOT_SERVER_SPAWN nearest a city centre (cities are >1100 blocks apart, so a 24-lot
+-- search box never reaches a neighbouring city). Returns {x,z} lot coords or nil.
+local function findServerSpawnNear(LC, cx, cz, Net)
+	local LSZ = turf.Lot.LOT_SIZE
+	local cx0 = cx - (cx % LSZ)
+	local cz0 = cz - (cz % LSZ)
+	local R = 24
+	local found, bestD2 = nil, nil
+	local t = 0
+	local x = cx0 - R * LSZ
+	while x <= cx0 + R * LSZ do
+		local z = cz0 - R * LSZ
+		while z <= cz0 + R * LSZ do
+			local L = LC:getLotAt(x, z)
+			if L and L.vtype == turf.Lot.LOT_SERVER_SPAWN then
+				local d2 = (x - cx0) * (x - cx0) + (z - cz0) * (z - cz0)
+				if bestD2 == nil or d2 < bestD2 then bestD2 = d2; found = { x = x, z = z } end
+			end
+			z = z + LSZ
+		end
+		x = x + LSZ
+		t = t + 1
+		if Net and t % 8 == 0 then Net:doKeepAlive() end
+	end
+	return found
+end
+
+-- A spawn point {x,z,y} for the centre city + each satellite (LOT_SERVER_SPAWN if found, else
+-- the city centre at terrain height).
+local function buildCitySpawns(W, LC, Net)
+	local LSZ = turf.Lot.LOT_SIZE
+	local centers = { { x = 0, z = 0 } }
+	for _, c in ipairs(computeSatelliteCenters(W, LC)) do centers[#centers + 1] = c end
+	local spawns = {}
+	for _, c in ipairs(centers) do
+		local s = findServerSpawnNear(LC, c.x, c.z, Net)
+		if s then
+			spawns[#spawns + 1] = { x = s.x, z = s.z, y = 11 }
+		else
+			local cx0 = c.x - (c.x % LSZ)
+			local cz0 = c.z - (c.z % LSZ)
+			local y = getTerrainHeight(W, LC, cx0 + math.floor(LSZ / 2), cz0 + math.floor(LSZ / 2))
+			spawns[#spawns + 1] = { x = cx0, z = cz0, y = y }
+		end
+	end
+	return spawns
+end
+
+local function getCitySpawns(W, LC, Net)
+	if CITY_SPAWNS == nil or #CITY_SPAWNS == 0 then CITY_SPAWNS = buildCitySpawns(W, LC, Net) end
+	return CITY_SPAWNS
+end
+
+
 -- ─── Part 8: city generation ─────────────────────────────────────────────────
 -- Satellites are generated in the OnMapGen PRE-hook (before standard generation) so the
 -- engine's economy/ownership init — which runs as part of standard generation — includes
@@ -775,5 +858,46 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 		end
 	end
 
+	-- Per-player spawn support: record each city's spawn lot and default the world spawn to the
+	-- centre city (each generate_city set it to its own city, so otherwise the last one wins).
+	CITY_SPAWNS = buildCitySpawns(W, LC, Net)
+	if CITY_SPAWNS[1] then
+		W:setSpawnPoint(turf.iVec3(CITY_SPAWNS[1].x + math.floor(LSZ / 2), CITY_SPAWNS[1].y,
+			CITY_SPAWNS[1].z + math.floor(LSZ / 2)))
+	end
+
 	W:genLotCache()
+end
+
+
+-- ─── Part 9: per-player random spawn city (per save, first join) ──────────────
+-- A player's first spawn (before they own a base) lands in a city chosen by a deterministic
+-- hash of their account id + the map's spawn signature: different players get different
+-- cities, a given player is stable on rejoin, and it varies per map. Once they own a base
+-- they respawn there normally. Chained so TakaroConnector's hook still runs; pcall-guarded
+-- because a login-hook error would take down the --strictlua server.
+local _mb_prev_onPlayerLogin_extra = customFunc.onPlayerLogin_extra
+customFunc.onPlayerLogin_extra = function(GMS, P)
+	if _mb_prev_onPlayerLogin_extra then _mb_prev_onPlayerLogin_extra(GMS, P) end
+	pcall(function()
+		if not P then return end
+		local nBases = turf.TriggerHandler.getNBasesOwnedByPlayer(P)
+		if nBases and nBases > 0 then return end          -- already settled in a city
+		local W = P:getWorld()
+		if not W then return end
+		local LC = W:getLotContainer()
+		if not LC then return end
+		local Net = turf.NetworkHandler.getInstance()
+		local spawns = getCitySpawns(W, LC, Net)
+		if not spawns or #spawns == 0 then return end
+		local sig = 0
+		for _, s in ipairs(spawns) do sig = sig + s.x * 73856093 + s.z * 19349663 end
+		local cred = P:getCredentials()
+		local acct = (cred and cred.accountId) or P:getId() or 0
+		local a = math.abs(math.floor(acct)) % 1000003
+		local b = math.abs(math.floor(sig)) % 1000003
+		local pick = spawns[((a * 17 + b) % #spawns) + 1]
+		local LSZ = turf.Lot.LOT_SIZE
+		P:teleport3i(pick.x + math.floor(LSZ / 2), pick.y, pick.z + math.floor(LSZ / 2))
+	end)
 end
