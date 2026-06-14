@@ -11,7 +11,6 @@ function get_footprints(W, LC, radius, startX, startZ, maxPlayerBases)
 		{ name = "Caryard",                 cat = turf.LotPackItem.LPI_CAT_COMMERCE },
 		{ name = "Helifield",               cat = turf.LotPackItem.LPI_CAT_COMMERCE },
 		{ name = "S-Mart Department Store", cat = turf.LotPackItem.LPI_CAT_COMMERCE },
-		{ name = "Big Office #1",           cat = turf.LotPackItem.LPI_CAT_OFFICE   },
 	}
 	for _, entry in ipairs(guaranteed) do
 		local lpis = {}
@@ -273,6 +272,11 @@ local function isRoadLot(LC, x, z)
 	return L ~= nil and L.vtype == turf.Lot.LOT_ROAD
 end
 
+-- Cross-TL junction coordinates recorded by buildHighwayZ/buildHighwayX as they run, so the
+-- ring-loop builder (Part 6c) can join the 4 junctions. .east/.west/.north/.south = {x,z};
+-- .y = the shared elevated deck level (all 4 highways use lotHeight(0,0)).
+local _mb_crosses = {}
+
 -- Places a 4-lot highway ramp (hramp*) along x=fx, anchored at anchorZ. hramp is itself
 -- a 4-lot piece, so the 3 following lots must be cleared first or the highway/terrain
 -- would overwrite them and leave only 1 lot of ramp. Placed at the highway level baseY.
@@ -532,28 +536,47 @@ local function buildHighwayZ(LC, Net, W, satZ)
 		-- stays aligned). Sea spans use the canal bridge piece.
 		local path
 		local y = hwY
+		local isPass = false
 		if vt == turf.Lot.LOT_SEA then
 			-- Canal bridge piece has a built-in -3 yoffset (roads.csv); loadLot doesn't
 			-- auto-apply it, so drop it 3 or the bridge deck sits 3 too tall.
 			path = "packs/vanilla/highroad_canal_e"
 			y = hwY - 3
 		elseif idx % 2 == 0 then
-			path = "packs/vanilla/highroad_e"
+			path = "packs/vanilla/highroad_ew_pass"   -- E/W highway w/ N/S underpass (drive-through)
+			isPass = true
 		else
-			path = "packs/vanilla/highroad_e_alt"
+			path = "packs/vanilla/highroad_e_alt"     -- lit alt variant (alternating lights)
 		end
 		forceHighwayLot(LC, W, fx, z, path, 'n', y)
-		-- Road data so AI cars drive the elevated highway (high E/W traffic).
+		-- Road data: underpass lots also carry the low N/S cross-road so you can drive under.
 		local hL = LC:getLotAt(fx, z)
 		if hL then
 			local LRD = turf.LotRoadData.genNew()
-			LRD:setHighPerservingLow(false, false, true, true)
+			if isPass then
+				LRD:set2(true, true, false, false, false, false, true, true)  -- low N/S under, high E/W
+			else
+				LRD:setHighPerservingLow(false, false, true, true)            -- high E/W only
+			end
 			hL.vtype = turf.Lot.LOT_ROAD
 			hL.lotData = LRD
 		end
 		idx = idx + 1
 		z = z + LSZ
 		if z % (64 * LSZ) == 0 then Net:doKeepAlive() end
+	end
+
+	-- "Highway Cross TL" 5 lots past the center-end ramp top, into the deck (per request).
+	local crossZ = toward and (centerEdge + 9 * LSZ) or (centerEdge - 9 * LSZ)
+	if toward then _mb_crosses.east = { x = fx, z = crossZ } else _mb_crosses.west = { x = fx, z = crossZ } end
+	_mb_crosses.y = hwY
+	forceHighwayLot(LC, W, fx, crossZ, "packs/vanilla/highroad_crosstl", 'n', hwY)
+	local cL = LC:getLotAt(fx, crossZ)
+	if cL then
+		local LRD = turf.LotRoadData.genNew()
+		LRD:setHighPerservingLow(false, false, true, true)   -- E/W through, matches deck
+		cL.vtype = turf.Lot.LOT_ROAD
+		cL.lotData = LRD
 	end
 end
 
@@ -612,22 +635,28 @@ local function buildHighwayX(LC, Net, W, satX)
 		local vt = L and L.vtype or turf.Lot.LOT_HILLS
 		local path
 		local y = hwY
+		local isPass = false
 		if vt == turf.Lot.LOT_SEA then
 			-- Canal bridge piece has a built-in -3 yoffset (roads.csv); loadLot doesn't
 			-- auto-apply it, so drop it 3 or the bridge deck sits 3 too tall.
 			path = "packs/vanilla/highroad_canal_n"
 			y = hwY - 3
 		elseif idx % 2 == 0 then
-			path = "packs/vanilla/highroad_n"
+			path = "packs/vanilla/highroad_ns_pass"   -- N/S highway w/ E/W underpass (drive-through)
+			isPass = true
 		else
-			path = "packs/vanilla/highroad_n_alt"
+			path = "packs/vanilla/highroad_n_alt"     -- lit alt variant (alternating lights)
 		end
 		forceHighwayLot(LC, W, x, fz, path, 'n', y)
-		-- Road data so AI cars drive the elevated highway (high N/S traffic).
+		-- Road data: underpass lots also carry the low E/W cross-road so you can drive under.
 		local hL = LC:getLotAt(x, fz)
 		if hL then
 			local LRD = turf.LotRoadData.genNew()
-			LRD:setHighPerservingLow(true, true, false, false)
+			if isPass then
+				LRD:set2(false, false, true, true, true, true, false, false)  -- low E/W under, high N/S
+			else
+				LRD:setHighPerservingLow(true, true, false, false)            -- high N/S only
+			end
 			hL.vtype = turf.Lot.LOT_ROAD
 			hL.lotData = LRD
 		end
@@ -635,6 +664,97 @@ local function buildHighwayX(LC, Net, W, satX)
 		x = x + LSZ
 		if x % (64 * LSZ) == 0 then Net:doKeepAlive() end
 	end
+
+	-- "Highway Cross TL" 5 lots past the center-end ramp top, into the deck (per request).
+	local crossX = toward and (centerEdge + 9 * LSZ) or (centerEdge - 9 * LSZ)
+	if toward then _mb_crosses.north = { x = crossX, z = fz } else _mb_crosses.south = { x = crossX, z = fz } end
+	_mb_crosses.y = hwY
+	forceHighwayLot(LC, W, crossX, fz, "packs/vanilla/highroad_crosstl", 'n', hwY)
+	local cL = LC:getLotAt(crossX, fz)
+	if cL then
+		local LRD = turf.LotRoadData.genNew()
+		LRD:setHighPerservingLow(true, true, false, false)   -- N/S through, matches deck
+		cL.vtype = turf.Lot.LOT_ROAD
+		cL.lotData = LRD
+	end
+end
+
+
+-- ─── Part 6c: Ring loop joining the 4 cross-TL junctions ─────────────────────
+-- All 4 highways share one elevated deck level (lotHeight(0,0)), recorded as _mb_crosses.y,
+-- so the ring runs/corners sit flat at that level and line up with the crosses.
+
+-- Lay a straight elevated highway run between two endpoints along one axis, at the deck
+-- level y. Fills only the lots STRICTLY BETWEEN from and to (the endpoints are the cross
+-- junction / corner pieces, placed separately). axis 'z' = run along z at fixed x (E/W
+-- highway); axis 'x' = run along x at fixed z (N/S highway). Mirrors the main decks exactly:
+-- every other lot is the drive-through underpass piece (low cross-road under, high on-axis),
+-- the rest are the lit _alt variant (staggered lamps).
+local function buildRingRun(LC, W, Net, axis, fixed, from, to, y)
+	local LSZ = turf.Lot.LOT_SIZE
+	if from == to then return end
+	local step = (to > from) and LSZ or -LSZ
+	local pos = from + step
+	local idx = 0
+	while pos ~= to do
+		local x = (axis == 'z') and fixed or pos
+		local z = (axis == 'z') and pos or fixed
+		local isPass = (idx % 2 == 0)
+		local path
+		if axis == 'z' then
+			path = isPass and "packs/vanilla/highroad_ew_pass" or "packs/vanilla/highroad_e_alt"
+		else
+			path = isPass and "packs/vanilla/highroad_ns_pass" or "packs/vanilla/highroad_n_alt"
+		end
+		forceHighwayLot(LC, W, x, z, path, 'n', y)
+		local hL = LC:getLotAt(x, z)
+		if hL then
+			local LRD = turf.LotRoadData.genNew()
+			if axis == 'z' then
+				if isPass then
+					LRD:set2(true, true, false, false, false, false, true, true)  -- low N/S under, high E/W
+				else
+					LRD:setHighPerservingLow(false, false, true, true)            -- high E/W
+				end
+			else
+				if isPass then
+					LRD:set2(false, false, true, true, true, true, false, false)  -- low E/W under, high N/S
+				else
+					LRD:setHighPerservingLow(true, true, false, false)            -- high N/S
+				end
+			end
+			hL.vtype = turf.Lot.LOT_ROAD
+			hL.lotData = LRD
+		end
+		idx = idx + 1
+		pos = pos + step
+		if idx % 64 == 0 then Net:doKeepAlive() end
+	end
+end
+
+-- Drop a 90-degree elevated corner piece at (cx,cz) with high-traffic on the two faces it
+-- opens toward, so AI cars drive the turn. highN/S/E/W mark those faces.
+local function placeRingCorner(LC, W, cx, cz, piece, highN, highS, highE, highW, y)
+	forceHighwayLot(LC, W, cx, cz, piece, 'n', y)
+	local L = LC:getLotAt(cx, cz)
+	if L then
+		local LRD = turf.LotRoadData.genNew()
+		LRD:setHighPerservingLow(highN, highS, highE, highW)
+		L.vtype = turf.Lot.LOT_ROAD
+		L.lotData = LRD
+	end
+end
+
+-- Connect a N/S cross (north/south, at z=0) to an E/W cross (east/west, at x=0) with an L:
+-- a straight run out from the N/S cross along z to the corner column, the corner piece, then
+-- a straight leg down along x into the E/W cross. The corner sits at (nsCross.x, ewCross.z).
+-- Caller passes the geometrically-correct corner piece + the two faces it opens toward.
+local function connectCrosses(LC, W, Net, nsCross, ewCross, cornerPiece, hN, hS, hE, hW, y)
+	local cornerX = nsCross.x   -- N/S cross supplies the x column
+	local cornerZ = ewCross.z   -- E/W cross supplies the z column
+	buildRingRun(LC, W, Net, 'z', cornerX, nsCross.z, cornerZ, y)   -- run along z from N/S cross to corner
+	placeRingCorner(LC, W, cornerX, cornerZ, cornerPiece, hN, hS, hE, hW, y)
+	buildRingRun(LC, W, Net, 'x', cornerZ, cornerX, ewCross.x, y)   -- leg along x from corner into E/W cross
 end
 
 
@@ -844,6 +964,7 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 	-- East (+z) and West (-z) highways along the z-axis, one satellite at a time.
 	-- (z = east/west, x = north/south.) N/S along x still to come.
 	Net:forceUpdateStartupStatusString("Generating Highways")
+	_mb_crosses = {}
 	for _, sat in ipairs(satellites) do
 		-- z-axis (east/west) satellites: x ~= 0 (floor() can land on -16 for the west
 		-- one due to cos(270deg) being a tiny negative float), z large.
@@ -857,6 +978,32 @@ customFunc.OnMapGen_extra = function(GMS, W, LC, nFactions, nBasesPerFaction)
 			Net:doKeepAlive()
 		end
 	end
+
+	-- Ring loop: join the 4 cross-TL junctions into a square so they form a loop around the
+	-- centre. Each corner runs out along z from a N/S cross, turns, and drops along x into an
+	-- E/W cross. The corner piece opens toward the two runs (the loop interior), so it carries
+	-- the ANTIPODAL name to its position: NW corner -> cse, NE -> csw, SW -> cne, SE -> cnw.
+	Net:forceUpdateStartupStatusString("Connecting Highway Ring")
+	pcall(function()
+		local C = _mb_crosses
+		if not C.y then return end
+		-- NW corner (North<->West): run from North arrives E, leaves S -> opens S+E -> cse.
+		if C.north and C.west then
+			connectCrosses(LC, W, Net, C.north, C.west, "packs/vanilla/highroad_cse", false, true, true, false, C.y)
+		end
+		-- NE corner (North<->East): run from North arrives W, leaves S -> opens S+W -> csw.
+		if C.north and C.east then
+			connectCrosses(LC, W, Net, C.north, C.east, "packs/vanilla/highroad_csw", false, true, false, true, C.y)
+		end
+		-- SW corner (South<->West): run from South arrives E, leaves N -> opens N+E -> cne.
+		if C.south and C.west then
+			connectCrosses(LC, W, Net, C.south, C.west, "packs/vanilla/highroad_cne", true, false, true, false, C.y)
+		end
+		-- SE corner (South<->East): run from South arrives W, leaves N -> opens N+W -> cnw.
+		if C.south and C.east then
+			connectCrosses(LC, W, Net, C.south, C.east, "packs/vanilla/highroad_cnw", true, false, false, true, C.y)
+		end
+	end)
 
 	-- Per-player spawn support: record each city's spawn lot and default the world spawn to the
 	-- centre city (each generate_city set it to its own city, so otherwise the last one wins).
@@ -900,4 +1047,286 @@ customFunc.onPlayerLogin_extra = function(GMS, P)
 		local LSZ = turf.Lot.LOT_SIZE
 		P:teleport3i(pick.x + math.floor(LSZ / 2), pick.y, pick.z + math.floor(LSZ / 2))
 	end)
+end
+
+
+-- ─── Part 10: contain AI buying/racketeering to base area (like players) ──────
+-- The engine's pickLotsToBuy() picks a lot to BUY and a lot to RACKETEER from ANYWHERE on the
+-- map (it floods the richest/centre city), then attemptToBuyLots() acts ONLY on the two fields
+-- PCAI.nextTargetLot and PCAI.nextTargetRacketteer. The probe confirmed those are userdata with
+-- read/write .x/.z lot coords. So we override aiPlayer_doTurn (a global the engine calls each AI
+-- turn): let pickLotsToBuy choose, then if a chosen target is outside this gang's base radius,
+-- redirect it onto one of the gang's OWN base lots — buying/racketeering an owned lot is a no-op,
+-- so the AI can only ever expand within turf.Lot.BASE_RADIUS of its bases, exactly like players.
+--
+-- The construction/zoning path (aiplayer_doBuilding -> getVacantLotsAttachedToBase) is already
+-- base-bound, so it's untouched. We faithfully replicate vanilla aiPlayer_doTurn and only insert
+-- the containment between pickLotsToBuy and attemptToBuyLots (pcall-guarded so it can't crash).
+local function _mb_containTargets(PCCAI, W)
+	local LC = W:getLotContainer()
+	local bases = LC:getBasesOwnedBy(PCCAI.PCC.accountId)
+	if bases:size() < 1 then return end
+	local home = bases:get(0)                 -- a lot this gang owns (safe no-op redirect target)
+	local r = turf.Lot.BASE_RADIUS * turf.Lot.LOT_SIZE
+	local thr2 = r * r
+	local function outOfArea(t)
+		if not t then return false end        -- no target -> nothing to clamp
+		for i = 1, bases:size() do
+			local b = bases:get(i - 1)
+			local dx, dz = t.x - b.x, t.z - b.z
+			if dx * dx + dz * dz <= thr2 then return false end
+		end
+		return true
+	end
+	if outOfArea(PCCAI.nextTargetLot)        then PCCAI.nextTargetLot        = turf.LotCoordinate(home.x, home.z) end
+	if outOfArea(PCCAI.nextTargetRacketteer) then PCCAI.nextTargetRacketteer = turf.LotCoordinate(home.x, home.z) end
+end
+
+function aiPlayer_doTurn(PCCAI, W)
+	if (PCCAI.PCC.nBases < 1) then return end
+
+	PCCAI.targetWarchest = aiPlayer_calculateWarchest(PCCAI.PCC.networth)
+	PCCAI.constructionBudget = math.max(PCCAI.PCC:getMoney() * 0.5, 0)
+
+	if (PCCAI.isAtWar) then
+		PCCAI.timeInWarModifier = math.max(PCCAI.timeInWarModifier - 1, -30)
+	else
+		PCCAI.timeInWarModifier = math.min(PCCAI.timeInWarModifier + 5, 30)
+		PCCAI.PCC:addReputation(0.1 * 100)
+		if (PCCAI.PCC:getReputation() > 10 * 100 and PCCAI.PCC.landValue < BASE_LOT_PRICE * 4) then
+			PCCAI.PCC:addReputation(-100)
+			PCCAI.PCC:transactMoney(5000 * 100)
+		end
+	end
+
+	if (not PCCAI.isAtWar and PCCAI.PCC.nBases > 0) then
+		PCCAI.PCC.bonuses.smallTownMayor = true
+		if (aiplayer_hasExpanded(PCCAI) or PCCAI.PCC:getMoney() > AI_EXPANSION_CASH_THRESH) then
+			PCCAI.racketeerRepuationThresh = 5 * 100
+		end
+		PCCAI:pickLotsToBuy(W)
+		pcall(_mb_containTargets, PCCAI, W)    -- clamp targets to base area; never crash the turn
+		PCCAI:attemptToBuyLots(W)
+		if (aiplayer_wantsNewBase(PCCAI, W)) then
+			aiplayer_establishNewBase(PCCAI, W)
+		end
+	end
+end
+
+
+-- Skip the engine's gen-time initial buy/racketeer pass. aiPlayer_doInitTurn runs in a loop at
+-- generation while every gang is still on its CENTRE start-base (before distribution moves them),
+-- so its racketeering floods the centre with buildings we'd otherwise have to strip. We end that
+-- loop immediately: gangs start with just their base and build out their OWN city over time via
+-- the base-area-contained aiPlayer_doTurn — so the rule applies BEFORE anything is racketeered,
+-- and we never release a gang's buildings.
+function aiPlayer_doInitTurn(PCCAI, W, turnCount)
+	return false
+end
+
+
+-- ─── Part 11: distribute gangs evenly across cities (runtime, once per world) ──
+-- The engine's initial gang->base assignment is origin-bounded C++: it seeds every gang in the
+-- CENTRE and ignores satellite faction bases, so gen-time placement can't move them (thinning
+-- centre bases just starves it -> gangs with no base). Instead, once the gangs exist we reassign
+-- them: each gang is given a couple of bandit bases in an evenly-chosen city (claim = the
+-- engine's own MOB_BASE->BASE conversion) and the centre base it was handed is released. With the
+-- base-area containment (Part 10), each gang then develops only its own city. No kickstart, no
+-- economy edits. Runs once; a restart re-detects existing spread and skips.
+local _mb_distributed = false
+local MB_BASES_PER_GANG = 2
+local _mb_prev_poll_dist = customFunc.pollServerTick_extra
+customFunc.pollServerTick_extra = function(NH)
+	if _mb_prev_poll_dist then _mb_prev_poll_dist(NH) end
+	if _mb_distributed then return end
+	pcall(function()
+		local PC = NH:getPlayerContainer()
+		if not PC then return end
+		local W = nil
+		for i = 0, PC:getNPlayers() - 1 do local P = PC:get(i); if P then W = P:getWorld() end; if W then break end end
+		local gangs = {}
+		for i = 0, PC:getNPlayersStored() - 1 do
+			local c = PC:getCredentialsAt(i)
+			if c and c:isAiPlayer() then
+				gangs[#gangs + 1] = c
+				if not W then W = c:getWorld() end
+			end
+		end
+		if not W or #gangs == 0 then return end          -- not ready; retry next tick
+		local LC = W:getLotContainer()
+		if not LC then return end
+
+		local cities = { { x = 0, z = 0, r = MAIN_CITY_RADIUS } }
+		for _, c in ipairs(computeSatelliteCenters(W, LC)) do
+			cities[#cities + 1] = { x = c.x, z = c.z, r = SAT_CITY_RADIUS }
+		end
+		local nC = #cities
+
+		-- restart safety: if any gang already owns a satellite base, we've already distributed.
+		for _, c in ipairs(gangs) do
+			local owned = LC:getBasesOwnedBy(c.accountId)
+			for j = 1, owned:size() do
+				local b = owned:get(j - 1)
+				for ci = 2, nC do
+					local d = cities[ci]; local dx, dz = b.x - d.x, b.z - d.z
+					if dx * dx + dz * dz <= d.r * d.r then _mb_distributed = true; return end
+				end
+			end
+		end
+
+		-- per-world PRNG (runtime math.random is unseeded); seed from city geometry -> varies per map
+		local seed = 1234567
+		for _, c in ipairs(cities) do seed = seed + c.x * 73856093 + c.z * 19349663 end
+		local rng = math.abs(seed) % 2147483647
+		if rng == 0 then rng = 1 end
+		local function nextRand(n) rng = (rng * 16807) % 2147483647; return (rng % n) + 1 end
+
+		-- even round-robin city assignment for the gangs, shuffled per world
+		local order = {}
+		local base = math.floor(#gangs / nC)
+		local extra = #gangs - base * nC
+		for ci = 1, nC do for _ = 1, base do order[#order + 1] = ci end end
+		local pe = {}
+		while extra > 0 do local ci = nextRand(nC); if not pe[ci] then pe[ci] = true; order[#order + 1] = ci; extra = extra - 1 end end
+		for i = #order, 2, -1 do local j = nextRand(i); order[i], order[j] = order[j], order[i] end
+
+		-- pre-scan each city for unoccupied bandit bases
+		local LSZ = turf.Lot.LOT_SIZE
+		local cityBandits = {}
+		local tick = 0
+		for ci = 1, nC do
+			local city = cities[ci]
+			local pool = {}
+			local cx0 = city.x - (city.x % LSZ); local cz0 = city.z - (city.z % LSZ)
+			local rr = math.ceil(city.r / LSZ)
+			for ix = -rr, rr do
+				for iz = -rr, rr do
+					if ix * ix + iz * iz <= rr * rr then
+						local x, z = cx0 + ix * LSZ, cz0 + iz * LSZ
+						local L = LC:getLotAt(x, z)
+						if L and L.vtype == turf.Lot.LOT_MOB_BASE and L.owner == 0 and L.occupier == 0 then
+							pool[#pool + 1] = { x = x, z = z }
+						end
+					end
+					tick = tick + 1; if tick % 64 == 0 then NH:doKeepAlive() end
+				end
+			end
+			cityBandits[ci] = pool
+		end
+
+		-- give each gang bases in its city, release the centre base(s) it was handed
+		for gi, c in ipairs(gangs) do
+			local ci = order[gi]
+			local city = cities[ci]
+			local pid = c.accountId
+			local got = 0
+			local pool = cityBandits[ci]
+			while got < MB_BASES_PER_GANG and #pool > 0 do
+				local b = table.remove(pool)
+				local L = LC:getLotAt(b.x, b.z)
+				if L and L.vtype == turf.Lot.LOT_MOB_BASE and L.owner == 0 and L.occupier == 0 then
+					LC:createSpawnFlagInCentreOfLot(b.x, b.z, 0)
+					L.owner = pid; L.occupier = pid
+					LC:manualAddCacheUpdate(b.x, b.z, turf.Lot.LOT_MOB_BASE, turf.Lot.LOT_BASE)
+					got = got + 1
+				end
+			end
+			if got > 0 then
+				local owned = LC:getBasesOwnedBy(pid)
+				for j = 1, owned:size() do
+					local b = owned:get(j - 1)
+					local dx, dz = b.x - city.x, b.z - city.z
+					if dx * dx + dz * dz > city.r * city.r then
+						local L = LC:getLotAt(b.x, b.z)
+						if L and L.owner == pid then L.owner = 0; L.occupier = 0 end
+					end
+				end
+			end
+			NH:doKeepAlive()
+		end
+
+		LC:refreshLotCache()
+		_mb_distributed = true
+	end)
+end
+
+
+-- ─── Part 12: missions target the NEAREST building, not a random one ──────────
+-- Missions pick their target via turf.TriggerHandler.getRandomBuisnessWithName(P,...), which
+-- returns a RANDOM matching building anywhere on the map. With multiple cities the target is
+-- usually in another city (ambulance impossible, mechanic "towns away"). We wrap it so it samples
+-- the engine's random pick several times and returns the one NEAREST the player. Defensive:
+-- the setup and the per-call logic both fall back to vanilla on any error, so it can never break
+-- the mod or crash a mission under --strictlua.
+pcall(function()
+	local TH = turf.TriggerHandler
+	if not TH then return end
+	local _orig = TH.getRandomBuisnessWithName
+	if type(_orig) ~= "function" then return end
+	TH.getRandomBuisnessWithName = function(P, a, b, name)
+		-- Only force "nearest" for mission-critical service buildings. Other lookups (e.g.
+		-- heist/undermining targets that are meant to be across town) keep vanilla random.
+		if not (name == "Hospital" or name == "Mechanic Garage" or name == "Caryard") then
+			return _orig(P, a, b, name)
+		end
+		local ok, result = pcall(function()
+			if not P then return nil end
+			local W = P:getWorld()
+			local LC = W and W:getLotContainer()
+			if not LC then return nil end
+			local px, pz = P:getPos(0), P:getPos(2)
+			local best, bestD2 = nil, nil
+			for _ = 1, 15 do
+				local idx = _orig(P, a, b, name)
+				if idx then
+					local lc = LC:indexToLotCoordinate(idx)
+					if lc then
+						local dx, dz = lc.x - px, lc.z - pz
+						local d2 = dx * dx + dz * dz
+						if bestD2 == nil or d2 < bestD2 then bestD2 = d2; best = idx end
+					end
+				end
+			end
+			return best
+		end)
+		if ok and result ~= nil then return result end
+		return _orig(P, a, b, name)
+	end
+end)
+
+
+-- ─── Part 13: ambulance patient pickup must be NEAR the player ────────────────
+-- Vanilla ambulanceMission_getRandomLot accepts a random house within a radius that starts at
+-- ~400 lots (6.4km) and grows — so with multiple cities the patient is often in another city,
+-- impossible to reach before the timer. Override it (global function) to pick the NEAREST of
+-- several sampled houses, so the patient is in/near the player's own city. Saves and falls back
+-- to the original on any error (strictlua-safe).
+local MB_AMBULANCE_MAX_DIST = 1000   -- patient must be within this many metres of the player
+local _mb_orig_amblot = ambulanceMission_getRandomLot
+if type(_mb_orig_amblot) == "function" then
+	function ambulanceMission_getRandomLot(M, P, objectiveId)
+		local ok = pcall(function()
+			local LC = P:getWorld():getLotContainer()
+			local px, pz = P:getPos(0), P:getPos(2)
+			local limit2 = MB_AMBULANCE_MAX_DIST ^ 2
+			local chosen, closest, closestD2 = nil, nil, nil
+			for _ = 1, 50 do
+				local h = turf.TriggerHandler.getRandomHouseWithPopRange(P, 0, 0.25, 2, 200)
+				if h >= LC:getNLots() then h = turf.TriggerHandler.getRandomHouse(P, 0, 0.25) end
+				if h < LC:getNLots() then
+					local lc = LC:indexToLotCoordinate(h)
+					local dx, dz = lc.x - px, lc.z - pz
+					local d2 = dx * dx + dz * dz
+					if d2 <= limit2 then chosen = h; break end          -- within the limit: take it
+					if closestD2 == nil or d2 < closestD2 then closestD2 = d2; closest = h end
+				end
+			end
+			local pick = chosen or closest                            -- closest only if none in range
+			if not pick then error("no house found") end
+			local lc = LC:indexToLotCoordinate(pick)
+			local llaabb = LC:getLotAABB(lc.x, lc.z)
+			M:getObjective(objectiveId).waypoint = turf.iVec3(llaabb:getMidX(), 10, llaabb:getMidZ())
+		end)
+		if not ok then return _mb_orig_amblot(M, P, objectiveId) end
+	end
 end
