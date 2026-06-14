@@ -5,11 +5,14 @@ function get_footprints(W, LC, radius, startX, startZ, maxPlayerBases)
 	local FP_POOL, nPoolWithMaxConuts = _orig_get_footprints(W, LC, radius, startX, startZ, maxPlayerBases)
 	local LPC = turf.LotPackContainer:getInstance()
 	local nLPI = LPC:getNLotPackItems()
+
+	-- NOTE: buildings we never want to auto-spawn are handled in no_spawn_buildings.lua
+	-- (loaded before this file), which flags their doNotSpawn. Edit the list there.
+
 	local guaranteed = {
 		{ name = "Hospital",                cat = turf.LotPackItem.LPI_CAT_COMMERCE },
 		{ name = "Mechanic Garage",         cat = turf.LotPackItem.LPI_CAT_COMMERCE },
 		{ name = "Caryard",                 cat = turf.LotPackItem.LPI_CAT_COMMERCE },
-		{ name = "Helifield",               cat = turf.LotPackItem.LPI_CAT_COMMERCE },
 		{ name = "S-Mart Department Store", cat = turf.LotPackItem.LPI_CAT_COMMERCE },
 	}
 	for _, entry in ipairs(guaranteed) do

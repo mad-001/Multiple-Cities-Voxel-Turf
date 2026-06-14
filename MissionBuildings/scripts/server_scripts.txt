@@ -1,1 +1,2 @@
+scripts/server/map_generation/no_spawn_buildings.lua
 scripts/server/map_generation/mission_buildings_footprints.lua
